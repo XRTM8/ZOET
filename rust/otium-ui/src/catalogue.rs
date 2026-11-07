@@ -48,20 +48,17 @@ pub fn normalized(value: &str) -> String {
     }) {
         words.truncate(index);
     }
-    if words.last() == Some(&"قرمزي") {
-        words.pop();
-    }
-    if words
-        .last()
-        .is_some_and(|word| ["كامل", "بالعربية"].contains(word))
-    {
-        words.pop();
-    }
-    if words
-        .last()
-        .is_some_and(|word| ["مترجم", "مترجمة", "مدبلج", "مدبلجة"].contains(word))
-    {
-        words.pop();
+    while let Some(last) = words.last() {
+        if [
+            "قرمزي", "كامل", "بالعربية", "للعربية", "مترجم", "مترجمة", "مدبلج",
+            "مدبلجة", "اونلاين", "اون", "لاين", "dubbed", "dub", "subbed", "sub",
+        ]
+        .contains(last)
+        {
+            words.pop();
+        } else {
+            break;
+        }
     }
     let mut result = Vec::new();
     let mut index = 0;
@@ -201,14 +198,38 @@ pub fn clean_title(title: &str) -> String {
             break;
         }
     }
-    if let Some((base, _)) = clean.split_once(" - قرمزي") {
-        clean = base;
-    }
-    if let Some((base, _)) = clean.split_once(" مترجم") {
-        clean = base;
-    }
-    if let Some((base, _)) = clean.split_once(" مدبلج") {
-        clean = base;
+    for suffix in [
+        " - قرمزي",
+        " - مدبلج بالعربية",
+        " - مدبلجة بالعربية",
+        " - مدبلج للعربية",
+        " - مدبلج",
+        " - مدبلجة",
+        " - مترجم للعربية",
+        " - مترجمة للعربية",
+        " - مترجم",
+        " - مترجمة",
+        " مدبلج بالعربية",
+        " مدبلجة بالعربية",
+        " مدبلج للعربية",
+        " مدبلجة للعربية",
+        " مدبلج",
+        " مدبلجة",
+        " مترجم بالعربية",
+        " مترجمة بالعربية",
+        " مترجم للعربية",
+        " مترجمة للعربية",
+        " مترجم",
+        " مترجمة",
+        " (مدبلج)",
+        " [مدبلج]",
+        " (مترجم)",
+        " [مترجم]",
+    ] {
+        if let Some((base, _)) = clean.split_once(suffix) {
+            clean = base;
+            break;
+        }
     }
     clean.trim().to_owned()
 }
@@ -294,6 +315,8 @@ struct Group {
 fn identity(kind: &str, edition: &str, title: &str, episode: &str, season: &str) -> String {
     if kind == "episode" {
         format!("{kind}\0{edition}\0{title}\0{episode}\0{season}")
+    } else if kind == "series" {
+        format!("{kind}\0{title}")
     } else {
         format!("{kind}\0{edition}\0{title}")
     }
@@ -334,7 +357,7 @@ pub fn merge(items: &[Value], preferred: &str) -> Vec<Value> {
         let found = candidates.into_iter().find(|&i| {
             let group = &groups[i];
             group.kind == kind
-                && group.edition == edition
+                && (kind == "series" || group.edition == edition)
                 && (group.urls.contains(&url) || compatible_year(&group.year, &year))
                 && (kind != "episode" || (group.episode == episode && group.season == season))
         });
@@ -366,6 +389,7 @@ pub fn merge(items: &[Value], preferred: &str) -> Vec<Value> {
                 continue;
             }
             offer["source"] = json!(provider(&offer));
+            offer["edition"] = json!(self::edition(&offer));
             urls.insert(offer_url, at);
             group.offers.push(offer);
         }
@@ -398,14 +422,32 @@ pub fn merge(items: &[Value], preferred: &str) -> Vec<Value> {
                 }
             }
             let mut sources: Vec<&str> = Vec::new();
+            let mut editions: Vec<&str> = Vec::new();
             for offer in &group.offers {
                 let source = provider(offer);
                 if !sources.contains(&source) {
                     sources.push(source);
                 }
+                let ed = edition(offer);
+                if !editions.contains(&ed) {
+                    editions.push(ed);
+                }
             }
             primary["sources"] = json!(sources);
-            primary["edition"] = json!(group.edition);
+            primary["editions"] = json!(editions);
+            let has_both = editions.contains(&"original") && editions.contains(&"dubbed");
+            primary["has_both_editions"] = json!(has_both);
+            if has_both {
+                primary["edition"] = json!("both");
+            } else {
+                primary["edition"] = json!(group.edition);
+            }
+            if group.kind == "series" {
+                let cleaned = clean_series_title(&field(&primary, "title"));
+                if !cleaned.is_empty() {
+                    primary["title"] = json!(cleaned);
+                }
+            }
             primary["offers"] = json!(group.offers);
             Some(primary)
         })
@@ -543,8 +585,15 @@ pub fn find_counterpart_with_edition(
     let matches: Vec<Value> = candidates
         .iter()
         .filter(|candidate| {
+            let ed_matches = edition(candidate) == desired_edition
+                || candidate["editions"].as_array().map_or(false, |eds| {
+                    eds.iter().any(|e| e.as_str() == Some(desired_edition))
+                })
+                || candidate["offers"].as_array().map_or(false, |offers| {
+                    offers.iter().any(|o| edition(o) == desired_edition)
+                });
             (kind(candidate) == "series" || !field(candidate, "seriesUrl").is_empty())
-                && edition(candidate) == desired_edition
+                && ed_matches
                 && compatible_year(&year, &field(candidate, "year"))
                 && self::titles(candidate)
                     .iter()
@@ -553,7 +602,7 @@ pub fn find_counterpart_with_edition(
         .cloned()
         .collect();
     let matches = merge(&matches, "cinemana");
-    if matches.len() == 1 {
+    let target = if matches.len() == 1 {
         matches.into_iter().next()
     } else if matches.len() > 1 && !year.is_empty() {
         matches.into_iter().find(|m| field(m, "year") == year)
@@ -561,8 +610,15 @@ pub fn find_counterpart_with_edition(
         let fuzzy: Vec<Value> = candidates
             .iter()
             .filter(|candidate| {
+                let ed_matches = edition(candidate) == desired_edition
+                    || candidate["editions"].as_array().map_or(false, |eds| {
+                        eds.iter().any(|e| e.as_str() == Some(desired_edition))
+                    })
+                    || candidate["offers"].as_array().map_or(false, |offers| {
+                        offers.iter().any(|o| edition(o) == desired_edition)
+                    });
                 (kind(candidate) == "series" || !field(candidate, "seriesUrl").is_empty())
-                    && edition(candidate) == desired_edition
+                    && ed_matches
                     && compatible_year(&year, &field(candidate, "year"))
                     && self::titles(candidate).iter().any(|ct| {
                         titles.iter().any(|t| {
@@ -581,6 +637,24 @@ pub fn find_counterpart_with_edition(
         }
     } else {
         None
+    };
+
+    if let Some(target) = target {
+        if let Some(offers) = target["offers"].as_array() {
+            if let Some(offer) = offers.iter().find(|o| edition(o) == desired_edition) {
+                let mut resolved = offer.clone();
+                if field(&resolved, "year").is_empty() && !field(&target, "year").is_empty() {
+                    resolved["year"] = target["year"].clone();
+                }
+                if resolved["offers"].is_null() {
+                    resolved["offers"] = target["offers"].clone();
+                }
+                return Some(resolved);
+            }
+        }
+        Some(target)
+    } else {
+        None
     }
 }
 
@@ -588,7 +662,7 @@ pub fn find_counterpart_with_edition(
 mod tests {
     use super::*;
     #[test]
-    fn dubbed_editions_stay_separate_and_never_match_original_episode_numbers() {
+    fn dubbed_and_subbed_editions_merge_into_unified_series_card() {
         let original = json!({"url":"https://krmzi.org/series/sea/","title":"مسلسل هذا البحر سوف يفيض","type":"series","year":2025});
         let dubbed = json!({"url":"cinemana:3129341","title":"هذا البحر سوف يفيض","aliases":["Tasacak Bu Deniz Dubbed"],"type":"series","year":2025});
         let alternate = json!({"url":"cinemana:1320095","title":"هذا البحر سوف يفيض","aliases":["Tasacak Bu Deniz"],"type":"series","year":2025});
@@ -596,13 +670,10 @@ mod tests {
             &[original.clone(), dubbed.clone(), alternate.clone()],
             "cinemana",
         );
-        assert_eq!(merged.len(), 2);
-        let original_group = merged
-            .iter()
-            .find(|item| edition(item) == "original")
-            .unwrap();
-        assert_eq!(original_group["offers"].as_array().unwrap().len(), 2);
-        assert_eq!(original_group["url"], "cinemana:1320095");
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0]["has_both_editions"], true);
+        assert_eq!(merged[0]["offers"].as_array().unwrap().len(), 3);
+        assert_eq!(merged[0]["title"], "هذا البحر سوف يفيض");
         assert_eq!(
             find_counterpart(&original, &[dubbed.clone(), alternate]).unwrap()["url"],
             "cinemana:1320095"

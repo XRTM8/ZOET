@@ -1,6 +1,6 @@
 [package]
 name = "otium-core"
-version = "2.6.1"
+version = "2.7.0"
 edition = "2021"
 license = "ISC"
 description = "ZOET by Otium shared native provider, catalogue and streaming engine"

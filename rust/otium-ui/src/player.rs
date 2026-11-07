@@ -1163,10 +1163,18 @@ pub fn open_sources() {
     } else {
         "<span class=\"sheet-pill dubbed\"><i class=\"fa-solid fa-microphone\"></i> مدبلج</span>"
     };
+    let direct_url = offers
+        .iter()
+        .find(|o| catalogue::edition(o) == target_ed)
+        .map(|o| s(o, "url"))
+        .unwrap_or_default();
+    let instant_label = if !direct_url.is_empty() { " (فوري)" } else { "" };
     content.push_str(&format!(
-        "<button class=\"sheet-row highlight-edition\" data-player-action=\"switch-edition\" data-edition=\"{}\"><span>التبديل إلى النسخة {}</span>{}</button>",
+        "<button class=\"sheet-row highlight-edition\" data-player-action=\"switch-edition\" data-edition=\"{}\" data-url=\"{}\"><span>التبديل إلى النسخة {}{}</span>{}</button>",
         target_ed,
+        esc(&direct_url),
         target_label,
+        instant_label,
         target_pill
     ));
     if !rows(&episode, "directStreams").is_empty() {
@@ -1274,7 +1282,7 @@ fn discover(source: String) {
         );
     });
 }
-fn switch_edition(target_edition: String) {
+fn switch_edition(target_edition: String, direct_url: Option<String>) {
     let Some(episode) = episode_identity() else {
         return;
     };
@@ -1298,10 +1306,27 @@ fn switch_edition(target_edition: String) {
     let other_source = if current_source == "cinemana" { "krmzi".to_string() } else { "cinemana".to_string() };
     let target_label = if target_edition == "dubbed" { "المدبلجة" } else { "المترجمة" };
 
-    let (session, generation, controller) = begin_switch(&format!("البحث عن النسخة {target_label}"));
+    let (session, generation, controller) = begin_switch(&format!("الانتقال إلى النسخة {target_label}"));
     spawn_local(async move {
         let signal = controller.as_ref().map(|c| c.signal());
-        // 1. First look in known_series for counterpart with target_edition
+        // 0. If direct_url was provided or is in series["offers"], use it directly!
+        let mut target_series_url = direct_url.filter(|u| !u.is_empty());
+        if target_series_url.is_none() {
+            if let Some(offers) = series["offers"].as_array() {
+                if let Some(offer) = offers.iter().find(|o| catalogue::edition(o) == target_edition) {
+                    let u = s(offer, "url");
+                    if !u.is_empty() {
+                        target_series_url = Some(u);
+                    }
+                }
+            }
+        }
+        if let Some(url) = target_series_url {
+            switch_provider(url);
+            return;
+        }
+
+        // 1. Look in known_series for counterpart with target_edition
         let known = app::known_series();
         if let Some(candidate) = catalogue::find_counterpart_with_edition(&identity, &known, Some(&target_edition)) {
             let url = if !s(&candidate, "seriesUrl").is_empty() {
@@ -1383,6 +1408,11 @@ fn switch_provider(url: String) {
             );
             return;
         };
+        let prev_offers = STATE.with(|c| c.borrow().series["offers"].clone());
+        let mut series = series;
+        if !prev_offers.is_null() && (series["offers"].is_null() || series["offers"].as_array().map_or(false, |a| a.is_empty())) {
+            series["offers"] = prev_offers;
+        }
         let target_episodes = rows(&series, "episodes");
         let current_all = STATE.with(|c| c.borrow().episodes.clone());
         let matched = catalogue::match_episode_cross_season(&episode, &current_all, &target_episodes);
@@ -2027,7 +2057,11 @@ fn action(row: Element) {
         "sources" => open_sources(),
         "provider" => switch_provider(url),
         "discover" => discover(row.get_attribute("data-source").unwrap_or_default()),
-        "switch-edition" => switch_edition(row.get_attribute("data-edition").unwrap_or_default()),
+        "switch-edition" => {
+            let target_edition = row.get_attribute("data-edition").unwrap_or_default();
+            let direct_url = row.get_attribute("data-url").filter(|s| !s.is_empty());
+            switch_edition(target_edition, direct_url);
+        }
         "browse-source" => app::open_series(url),
         "season" => {
             STATE.with(|c| {

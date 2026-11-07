@@ -272,8 +272,14 @@ fn card(item: &Value) -> String {
         .as_array()
         .cloned()
         .unwrap_or(vec![json!(catalogue::provider(item))]);
+    let has_both = item["has_both_editions"].as_bool().unwrap_or(false)
+        || item["editions"]
+            .as_array()
+            .map_or(false, |eds| eds.len() > 1);
     let is_dubbed = catalogue::edition(item) == "dubbed";
-    let edition_badge = if is_dubbed {
+    let edition_badge = if has_both {
+        "<span class=\"edition-badge edition-multi\"><i class=\"fa-solid fa-layer-group\"></i> مترجم ومدبلج</span>"
+    } else if is_dubbed {
         "<span class=\"edition-badge edition-dubbed\"><i class=\"fa-solid fa-microphone\"></i> مدبلج</span>"
     } else {
         "<span class=\"edition-badge edition-subbed\"><i class=\"fa-solid fa-closed-captioning\"></i> مترجم</span>"
@@ -283,13 +289,8 @@ fn card(item: &Value) -> String {
         .filter_map(Value::as_str)
         .map(|source| {
             format!(
-                "<span class=\"provider-tag provider-{source}\">{}{}</span>",
-                source_name(source),
-                if is_dubbed {
-                    " · مدبلج"
-                } else {
-                    ""
-                }
+                "<span class=\"provider-tag provider-{source}\">{}</span>",
+                source_name(source)
             )
         })
         .collect::<String>();
@@ -749,13 +750,34 @@ pub fn open_series(url: String) {
         }
         match response {
             Ok(mut series) if series["episodes"].is_array() => {
-                let group=known_series().into_iter().find(|item|s(item,"url")==url || item["offers"].as_array().is_some_and(|o|o.iter().any(|v|s(v,"url")==url)));
-                if let Some(group)=group {series["offers"]=group["offers"].clone();}
-                if s(&series,"url").is_empty(){series["url"]=json!(url);}
-                STATE.with(|state|state.borrow_mut().context=series.clone());
+                let group = known_series().into_iter().find(|item| {
+                    s(item, "url") == url
+                        || item["offers"]
+                            .as_array()
+                            .is_some_and(|o| o.iter().any(|v| s(v, "url") == url))
+                });
+                if let Some(group) = group {
+                    series["offers"] = group["offers"].clone();
+                    if !group["editions"].is_null() {
+                        series["editions"] = group["editions"].clone();
+                    }
+                    if !group["has_both_editions"].is_null() {
+                        series["has_both_editions"] = group["has_both_editions"].clone();
+                    }
+                }
+                if s(&series, "url").is_empty() {
+                    series["url"] = json!(url);
+                }
+                STATE.with(|state| state.borrow_mut().context = series.clone());
                 render_series_detail(&series);
-            },
-            _ => open_sheet("تعذّر تحميل الحلقات",&format!("<p class=\"empty-note\">المصدر غير متاح على اتصالك الآن.</p><button class=\"load-more-btn\" data-action=\"series\" data-url=\"{}\">إعادة المحاولة</button>",esc(&url)))
+            }
+            _ => open_sheet(
+                "تعذّر تحميل الحلقات",
+                &format!(
+                    "<p class=\"empty-note\">المصدر غير متاح على اتصالك الآن.</p><button class=\"load-more-btn\" data-action=\"series\" data-url=\"{}\">إعادة المحاولة</button>",
+                    esc(&url)
+                ),
+            ),
         }
     });
 }
@@ -775,13 +797,83 @@ fn render_series_detail(series: &Value) {
         .into_iter()
         .collect::<Vec<_>>();
     seasons.sort_by_key(|s| s.parse::<u32>().unwrap_or(u32::MAX));
-    let tabs=seasons.iter().map(|season|format!("<button class=\"season-tab{}\" data-action=\"season\" data-season=\"{}\">الموسم {}</button>",if Some(season)==seasons.first(){" active"}else{""},esc(season),esc(season))).collect::<String>();
+    let tabs = seasons
+        .iter()
+        .map(|season| {
+            format!(
+                "<button class=\"season-tab{}\" data-action=\"season\" data-season=\"{}\">الموسم {}</button>",
+                if Some(season) == seasons.first() {
+                    " active"
+                } else {
+                    ""
+                },
+                esc(season),
+                esc(season)
+            )
+        })
+        .collect::<String>();
     let offers = series["offers"].as_array().cloned().unwrap_or_default();
-    let providers = if offers.len() > 1 {
-        format!("<div class=\"series-provider-picker\"><span>المصدر</span>{}</div>",offers.iter().map(|offer|format!("<button class=\"series-provider-option{}\" data-action=\"series\" data-series-source=\"{}\" data-url=\"{}\">{}</button>",if s(offer,"url")==s(series,"url"){" active"}else{""},esc(&s(offer,"url")),esc(&s(offer,"url")),source_name(catalogue::provider(offer)))).collect::<String>())
+    let ed = catalogue::edition(series);
+    let is_dubbed = ed == "dubbed";
+    let clean_title = catalogue::clean_series_title(&s(series, "title"));
+
+    let subbed_offer = offers.iter().find(|o| catalogue::edition(o) == "original");
+    let dubbed_offer = offers.iter().find(|o| catalogue::edition(o) == "dubbed");
+    let has_both = (subbed_offer.is_some() && dubbed_offer.is_some())
+        || series["has_both_editions"].as_bool().unwrap_or(false);
+
+    let subbed_url = if !is_dubbed {
+        s(series, "url")
+    } else {
+        subbed_offer.map(|o| s(o, "url")).unwrap_or_default()
+    };
+    let dubbed_url = if is_dubbed {
+        s(series, "url")
+    } else {
+        dubbed_offer.map(|o| s(o, "url")).unwrap_or_default()
+    };
+
+    let edition_switcher = format!(
+        "<div class=\"series-edition-tabs\">\
+            <button class=\"series-edition-tab{}\" data-action=\"series-edition\" data-edition=\"original\" data-url=\"{}\" data-title=\"{}\">\
+                <i class=\"fa-solid fa-closed-captioning\"></i> النسخة المترجمة\
+            </button>\
+            <button class=\"series-edition-tab{}\" data-action=\"series-edition\" data-edition=\"dubbed\" data-url=\"{}\" data-title=\"{}\">\
+                <i class=\"fa-solid fa-microphone\"></i> النسخة المدبلجة\
+            </button>\
+        </div>",
+        if !is_dubbed { " active" } else { "" },
+        esc(&subbed_url),
+        esc(&clean_title),
+        if is_dubbed { " active" } else { "" },
+        esc(&dubbed_url),
+        esc(&clean_title)
+    );
+
+    let current_ed_offers: Vec<&Value> = offers
+        .iter()
+        .filter(|o| (catalogue::edition(o) == "dubbed") == is_dubbed)
+        .collect();
+    let providers = if current_ed_offers.len() > 1 {
+        format!(
+            "<div class=\"series-provider-picker\"><span>المصدر</span>{}</div>",
+            current_ed_offers
+                .iter()
+                .map(|offer| {
+                    format!(
+                        "<button class=\"series-provider-option{}\" data-action=\"series\" data-series-source=\"{}\" data-url=\"{}\">{}</button>",
+                        if s(offer, "url") == s(series, "url") { " active" } else { "" },
+                        esc(&s(offer, "url")),
+                        esc(&s(offer, "url")),
+                        source_name(catalogue::provider(offer))
+                    )
+                })
+                .collect::<String>()
+        )
     } else {
         String::new()
     };
+
     let poster = if s(series, "poster").is_empty() {
         s(series, "thumbnail")
     } else {
@@ -792,21 +884,50 @@ fn render_series_detail(series: &Value) {
     } else {
         ""
     };
-    let ed = catalogue::edition(series);
-    let is_dubbed = ed == "dubbed";
-    let ed_label = if is_dubbed { "مدبلج" } else { "مترجم" };
-    let other_ed = if is_dubbed { "original" } else { "dubbed" };
-    let other_label = if is_dubbed { "المترجمة" } else { "المدبلجة" };
-    let clean_title = catalogue::clean_series_title(&s(series, "title"));
-    let edition_switcher = format!(
-        "<div class=\"series-edition-picker\"><span class=\"series-edition-badge {}\">{}</span><button class=\"series-edition-switch-btn\" data-action=\"switch-detail-edition\" data-edition=\"{}\" data-title=\"{}\"><i class=\"fa-solid fa-arrows-rotate\"></i> الانتقال إلى النسخة {}</button></div>",
-        if is_dubbed { "dubbed" } else { "subbed" },
-        ed_label,
-        other_ed,
-        esc(&clean_title),
-        other_label
+    let ed_pill = if has_both {
+        "<span class=\"series-edition-pill multi\"><i class=\"fa-solid fa-layer-group\"></i> مترجم ومدبلج</span>"
+    } else if is_dubbed {
+        "<span class=\"series-edition-pill dubbed\"><i class=\"fa-solid fa-microphone\"></i> مدبلج</span>"
+    } else {
+        "<span class=\"series-edition-pill subbed\"><i class=\"fa-solid fa-closed-captioning\"></i> مترجم</span>"
+    };
+
+    open_sheet(
+        "تفاصيل المسلسل",
+        &format!(
+            "<div class=\"series-detail-hero\">\
+                <img class=\"series-detail-poster\" src=\"{}\" alt=\"\" referrerpolicy=\"no-referrer\">\
+                <div class=\"series-detail-shade\"></div>\
+                <div class=\"series-detail-info\">\
+                    <div class=\"series-badges-row\">\
+                        <span class=\"series-source-tag\">{}</span>\
+                        {}\
+                    </div>\
+                    <h4>{}</h4>\
+                    {}\
+                </div>\
+            </div>\
+            {}\
+            <p class=\"series-detail-story\" id=\"seriesStory\">{}</p>\
+            {}\
+            <div class=\"series-episode-heading\"><h5>الحلقات</h5><span>{}</span></div>\
+            <div class=\"season-tabs\" id=\"sheetSeasonTabs\">{tabs}</div>\
+            <label class=\"episode-search\"><i class=\"fa-solid fa-magnifying-glass\"></i>\
+                <input id=\"sheetEpisodeSearch\" type=\"search\" placeholder=\"ابحث عن حلقة\" aria-label=\"ابحث عن حلقة\">\
+            </label>\
+            <div class=\"sheet-episode-grid episode-card-list\" id=\"seriesEpisodeList\" data-season=\"{}\"></div>",
+            esc(&poster),
+            source_name(catalogue::provider(series)),
+            ed_pill,
+            esc(&clean_title),
+            edition_switcher,
+            providers,
+            esc(&s(series, "story")),
+            story_toggle,
+            episodes.len(),
+            esc(seasons.first().map(String::as_str).unwrap_or("1"))
+        ),
     );
-    open_sheet("تفاصيل المسلسل",&format!("<div class=\"series-detail-hero\"><img class=\"series-detail-poster\" src=\"{}\" alt=\"\" referrerpolicy=\"no-referrer\"><div class=\"series-detail-shade\"></div><div class=\"series-detail-info\"><div class=\"series-badges-row\"><span class=\"series-source-tag\">{}</span><span class=\"series-edition-pill {}\">{}</span></div><h4>{}</h4>{}</div></div>{providers}<p class=\"series-detail-story\" id=\"seriesStory\">{}</p>{story_toggle}<div class=\"series-episode-heading\"><h5>الحلقات</h5><span>{}</span></div><div class=\"season-tabs\" id=\"sheetSeasonTabs\">{tabs}</div><label class=\"episode-search\"><i class=\"fa-solid fa-magnifying-glass\"></i><input id=\"sheetEpisodeSearch\" type=\"search\" placeholder=\"ابحث عن حلقة\" aria-label=\"ابحث عن حلقة\"></label><div class=\"sheet-episode-grid episode-card-list\" id=\"seriesEpisodeList\" data-season=\"{}\"></div>",esc(&poster),source_name(catalogue::provider(series)),if is_dubbed { "dubbed" } else { "subbed" },ed_label,esc(&s(series,"title")),edition_switcher,esc(&s(series,"story")),episodes.len(),esc(seasons.first().map(String::as_str).unwrap_or("1"))));
     render_detail_episodes();
 }
 fn switch_detail_edition(target_edition: String, title: String) {
@@ -948,10 +1069,15 @@ fn click(event: Event) {
             }
             open_series(url);
         }
-        Some("switch-detail-edition") => {
+        Some("series-edition") | Some("switch-detail-edition") => {
+            let target_url = button.get_attribute("data-url").unwrap_or_default();
             let target_edition = button.get_attribute("data-edition").unwrap_or_default();
             let title = button.get_attribute("data-title").unwrap_or_default();
-            switch_detail_edition(target_edition, title);
+            if !target_url.is_empty() {
+                open_series(target_url);
+            } else {
+                switch_detail_edition(target_edition, title);
+            }
         }
         Some("episode") => {
             close_sheet();
