@@ -272,6 +272,12 @@ fn card(item: &Value) -> String {
         .as_array()
         .cloned()
         .unwrap_or(vec![json!(catalogue::provider(item))]);
+    let is_dubbed = catalogue::edition(item) == "dubbed";
+    let edition_badge = if is_dubbed {
+        "<span class=\"edition-badge edition-dubbed\"><i class=\"fa-solid fa-microphone\"></i> مدبلج</span>"
+    } else {
+        "<span class=\"edition-badge edition-subbed\"><i class=\"fa-solid fa-closed-captioning\"></i> مترجم</span>"
+    };
     let badges = sources
         .iter()
         .filter_map(Value::as_str)
@@ -279,7 +285,7 @@ fn card(item: &Value) -> String {
             format!(
                 "<span class=\"provider-tag provider-{source}\">{}{}</span>",
                 source_name(source),
-                if catalogue::edition(item) == "dubbed" {
+                if is_dubbed {
                     " · مدبلج"
                 } else {
                     ""
@@ -289,7 +295,7 @@ fn card(item: &Value) -> String {
         .collect::<String>();
     let year = s(item, "year");
     let rating = s(item, "rating");
-    format!("<button class=\"series-tile\" data-action=\"{kind}\" data-url=\"{}\"><span class=\"poster-frame\"><img class=\"series-tile-thumb\" src=\"{}\" alt=\"\" loading=\"lazy\" decoding=\"async\" referrerpolicy=\"no-referrer\"></span><span class=\"series-tile-body\"><span class=\"series-tile-title\">{}</span><span class=\"series-tile-sub\">{}{}</span><span class=\"catalogue-sources\">{badges}</span></span></button>",esc(&s(item,"url")),esc(&thumbnail),esc(&s(item,"title")),esc(&year),if rating.is_empty(){String::new()}else{format!(" · ★ {}",esc(&rating))})
+    format!("<button class=\"series-tile\" data-action=\"{kind}\" data-url=\"{}\"><span class=\"poster-frame\"><img class=\"series-tile-thumb\" src=\"{}\" alt=\"\" loading=\"lazy\" decoding=\"async\" referrerpolicy=\"no-referrer\">{edition_badge}</span><span class=\"series-tile-body\"><span class=\"series-tile-title\">{}</span><span class=\"series-tile-sub\">{}{}</span><span class=\"catalogue-sources\">{badges}</span></span></button>",esc(&s(item,"url")),esc(&thumbnail),esc(&s(item,"title")),esc(&year),if rating.is_empty(){String::new()}else{format!(" · ★ {}",esc(&rating))})
 }
 fn render_grid(id: &str, items: &[Value]) {
     let grid = el(id);
@@ -786,8 +792,83 @@ fn render_series_detail(series: &Value) {
     } else {
         ""
     };
-    open_sheet("تفاصيل المسلسل",&format!("<div class=\"series-detail-hero\"><img class=\"series-detail-poster\" src=\"{}\" alt=\"\" referrerpolicy=\"no-referrer\"><div class=\"series-detail-shade\"></div><div class=\"series-detail-info\"><span class=\"series-source-tag\">{}</span><h4>{}</h4></div></div>{providers}<p class=\"series-detail-story\" id=\"seriesStory\">{}</p>{story_toggle}<div class=\"series-episode-heading\"><h5>الحلقات</h5><span>{}</span></div><div class=\"season-tabs\" id=\"sheetSeasonTabs\">{tabs}</div><label class=\"episode-search\"><i class=\"fa-solid fa-magnifying-glass\"></i><input id=\"sheetEpisodeSearch\" type=\"search\" placeholder=\"ابحث عن حلقة\" aria-label=\"ابحث عن حلقة\"></label><div class=\"sheet-episode-grid episode-card-list\" id=\"seriesEpisodeList\" data-season=\"{}\"></div>",esc(&poster),source_name(catalogue::provider(series)),esc(&s(series,"title")),esc(&s(series,"story")),episodes.len(),esc(seasons.first().map(String::as_str).unwrap_or("1"))));
+    let ed = catalogue::edition(series);
+    let is_dubbed = ed == "dubbed";
+    let ed_label = if is_dubbed { "مدبلج" } else { "مترجم" };
+    let other_ed = if is_dubbed { "original" } else { "dubbed" };
+    let other_label = if is_dubbed { "المترجمة" } else { "المدبلجة" };
+    let clean_title = catalogue::clean_series_title(&s(series, "title"));
+    let edition_switcher = format!(
+        "<div class=\"series-edition-picker\"><span class=\"series-edition-badge {}\">{}</span><button class=\"series-edition-switch-btn\" data-action=\"switch-detail-edition\" data-edition=\"{}\" data-title=\"{}\"><i class=\"fa-solid fa-arrows-rotate\"></i> الانتقال إلى النسخة {}</button></div>",
+        if is_dubbed { "dubbed" } else { "subbed" },
+        ed_label,
+        other_ed,
+        esc(&clean_title),
+        other_label
+    );
+    open_sheet("تفاصيل المسلسل",&format!("<div class=\"series-detail-hero\"><img class=\"series-detail-poster\" src=\"{}\" alt=\"\" referrerpolicy=\"no-referrer\"><div class=\"series-detail-shade\"></div><div class=\"series-detail-info\"><div class=\"series-badges-row\"><span class=\"series-source-tag\">{}</span><span class=\"series-edition-pill {}\">{}</span></div><h4>{}</h4>{}</div></div>{providers}<p class=\"series-detail-story\" id=\"seriesStory\">{}</p>{story_toggle}<div class=\"series-episode-heading\"><h5>الحلقات</h5><span>{}</span></div><div class=\"season-tabs\" id=\"sheetSeasonTabs\">{tabs}</div><label class=\"episode-search\"><i class=\"fa-solid fa-magnifying-glass\"></i><input id=\"sheetEpisodeSearch\" type=\"search\" placeholder=\"ابحث عن حلقة\" aria-label=\"ابحث عن حلقة\"></label><div class=\"sheet-episode-grid episode-card-list\" id=\"seriesEpisodeList\" data-season=\"{}\"></div>",esc(&poster),source_name(catalogue::provider(series)),if is_dubbed { "dubbed" } else { "subbed" },ed_label,esc(&s(series,"title")),edition_switcher,esc(&s(series,"story")),episodes.len(),esc(seasons.first().map(String::as_str).unwrap_or("1"))));
     render_detail_episodes();
+}
+fn switch_detail_edition(target_edition: String, title: String) {
+    let token = STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        state.sheet_generation += 1;
+        state.sheet_generation
+    });
+    let label = if target_edition == "dubbed" { "المدبلجة" } else { "المترجمة" };
+    open_sheet(
+        "تفاصيل المسلسل",
+        &format!("<div class=\"detail-loading\"><div class=\"spinner-ring\"></div><p>جاري البحث عن النسخة {}…</p></div>", label),
+    );
+    spawn_local(async move {
+        let clean = catalogue::clean_series_title(&title);
+        let dummy = json!({"title": clean.clone(), "edition": target_edition, "type": "series"});
+        let known = known_series();
+        if let Some(found) = catalogue::find_counterpart_with_edition(&dummy, &known, Some(&target_edition)) {
+            let url = if !s(&found, "seriesUrl").is_empty() {
+                s(&found, "seriesUrl")
+            } else {
+                s(&found, "url")
+            };
+            if !url.is_empty() {
+                open_series(url);
+                return;
+            }
+        }
+        let preferred = storage("otium_preferred_source").unwrap_or("cinemana".into());
+        let other = if preferred == "cinemana" { "krmzi" } else { "cinemana" };
+        let mut queries = vec![clean.clone()];
+        if target_edition == "dubbed" {
+            queries.push(format!("{clean} مدبلج"));
+        } else {
+            queries.push(format!("{clean} مترجم"));
+        }
+        for src in [&preferred, other] {
+            for q in &queries {
+                if let Ok(results) = api::call("/api/search", &[("q", q.clone())], Some(src)).await {
+                    if STATE.with(|state| state.borrow().sheet_generation) != token {
+                        return;
+                    }
+                    let rows = results["results"].as_array().cloned().unwrap_or_default();
+                    if let Some(found) = catalogue::find_counterpart_with_edition(&dummy, &rows, Some(&target_edition)) {
+                        let url = if !s(&found, "seriesUrl").is_empty() {
+                            s(&found, "seriesUrl")
+                        } else {
+                            s(&found, "url")
+                        };
+                        if !url.is_empty() {
+                            open_series(url);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+        open_sheet(
+            "النسخة غير متاحة",
+            &format!("<p class=\"empty-note\">لم يتم العثور على نسخة {} لهذا المسلسل في السيرفرات الحالية.</p>", label),
+        );
+    });
 }
 fn render_detail_episodes() {
     let Some(list) = document().get_element_by_id("seriesEpisodeList") else {
@@ -866,6 +947,11 @@ fn click(event: Event) {
                 );
             }
             open_series(url);
+        }
+        Some("switch-detail-edition") => {
+            let target_edition = button.get_attribute("data-edition").unwrap_or_default();
+            let title = button.get_attribute("data-title").unwrap_or_default();
+            switch_detail_edition(target_edition, title);
         }
         Some("episode") => {
             close_sheet();
@@ -1202,7 +1288,7 @@ fn check_updates(manual: bool) {
             Ok(data) => {
                 let version = s(&data, "tag_name");
                 let remote = parse_version(&version);
-                let local = parse_version("2.6.0");
+                let local = parse_version("2.6.1");
                 if remote.is_empty() || remote <= local {
                     if manual {
                         notify("أنت تستخدم آخر إصدار");
@@ -1261,7 +1347,7 @@ pub fn init() {
     }
     apply_display();
     update_source();
-    text("installedVersionText", "v2.6.0");
+    text("installedVersionText", "v2.6.1");
     on("tabSeries", "click", |_| set_view("series"));
     on("tabMovies", "click", |_| set_view("movies"));
     on("openLibraryBtn", "click", |_| set_view("library"));

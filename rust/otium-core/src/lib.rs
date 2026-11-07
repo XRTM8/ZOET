@@ -863,7 +863,9 @@ pub fn parse_cards(html: &str, kind: &str) -> Vec<Value> {
         } else {
             "episode"
         };
-        result.push(json!({"url":url,"title":title,"thumbnail":thumbnail,"source":"krmzi","type":media_type,"seriesTitle":series_title,"episodeNum":number}));
+        let is_dubbed = block[1].contains("مدبلج") || url.contains("dubbed") || title.contains("مدبلج");
+        let edition = if is_dubbed { "dubbed" } else { "original" };
+        result.push(json!({"url":url,"title":title,"thumbnail":thumbnail,"source":"krmzi","type":media_type,"seriesTitle":series_title,"episodeNum":number,"edition":edition}));
     }
     result
 }
@@ -882,11 +884,14 @@ pub fn has_next_page(html: &str, page: u32, series: bool) -> bool {
             .is_match(html)
 }
 pub fn parse_series_detail(html: &str, url: &str) -> Value {
-    let title = clean_title(&capture(r"(?s)<h1[^>]*>(.*?)</h1>", html));
+    let raw_h1 = capture(r"(?s)<h1[^>]*>(.*?)</h1>", html);
+    let title = clean_title(&raw_h1);
     let story = strip_tags(&capture(
         r#"(?s)<div\s+class=["'](?:story|desc)["']>(.*?)</div>"#,
         html,
     ));
+    let is_dubbed = html.contains("مدبلج") || url.contains("dubbed") || raw_h1.contains("مدبلج");
+    let edition = if is_dubbed { "dubbed" } else { "original" };
     let anchors = Regex::new(r#"(?s)<a\s+[^>]*href=["']([^"']+)["'][^>]*>(.*?)</a>"#).unwrap();
     let mut seen = HashSet::new();
     let mut episodes = Vec::new();
@@ -896,16 +901,24 @@ pub fn parse_series_detail(html: &str, url: &str) -> Value {
         {
             continue;
         }
-        let title = strip_tags(&c[2]);
+        let ep_title = strip_tags(&c[2]);
         let decoded = Url::parse(&link)
             .ok()
             .map(|u| decode_percent(u.path()))
             .unwrap_or_else(|| link.clone());
         let mut num = capture(r"الحلقة[-\s]*(\d+)", &decoded);
         if num.is_empty() {
-            num = capture(r"(\d+)", &title);
+            num = capture(r"(\d+)", &ep_title);
         }
-        episodes.push(json!({"url":link,"title":if title.is_empty(){format!("الحلقة {num}")}else{title},"episodeNum":num,"source":"krmzi","seriesUrl":url}));
+        episodes.push(json!({
+            "url": link,
+            "title": if ep_title.is_empty() { format!("الحلقة {num}") } else { ep_title },
+            "seriesTitle": &title,
+            "episodeNum": num,
+            "source": "krmzi",
+            "seriesUrl": url,
+            "edition": edition,
+        }));
     }
     episodes.sort_by_key(|e| {
         e["episodeNum"]
@@ -914,7 +927,16 @@ pub fn parse_series_detail(html: &str, url: &str) -> Value {
             .parse::<u32>()
             .unwrap_or(0)
     });
-    json!({"url":url,"title":title,"poster":poster(html),"story":story,"episodes":episodes,"source":"krmzi","isSuccess":true})
+    json!({
+        "url": url,
+        "title": title,
+        "poster": poster(html),
+        "story": story,
+        "episodes": episodes,
+        "source": "krmzi",
+        "edition": edition,
+        "isSuccess": true
+    })
 }
 fn decode_percent(text: &str) -> String {
     url::form_urlencoded::parse(format!("x={}", text.replace('+', "%2B")).as_bytes())
@@ -981,18 +1003,31 @@ pub fn embed_url(name: &str, id: &str) -> String {
     }
 }
 pub fn parse_episode_detail(html: &str, url: &str) -> Value {
-    let mut title = clean_title(&capture(r"(?s)<h1[^>]*>(.*?)</h1>", html));
+    let raw_h1 = capture(r"(?s)<h1[^>]*>(.*?)</h1>", html);
+    let mut title = clean_title(&raw_h1);
     if title.is_empty() {
         title = clean_title(&capture(r"(?s)<title>(.*?)</title>", html));
     }
     let episode = capture(
         r"الحلقة[-\s]*(\d+)",
-        &format!("{} {title}", decode_percent(url)),
+        &format!("{} {title} {raw_h1}", decode_percent(url)),
     );
     let series = decode_html(&capture(
         r#"<a[^>]+href=["'](https://krmzi\.org/series/[^"']+)["']"#,
         html,
     ));
+    let is_dubbed = html.contains("مدبلج") || url.contains("dubbed") || raw_h1.contains("مدبلج");
+    let edition = if is_dubbed { "dubbed" } else { "original" };
+    let series_title = {
+        let re = Regex::new(r"الحلقة[-\s]*\d+.*").unwrap();
+        let s = re.replace(&title, "");
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            title.clone()
+        } else {
+            trimmed.to_string()
+        }
+    };
     let qesen = decode_html(&capture(
         r#"href=["']https://qesen\.net/krmzi\?post=([^"']+)["']"#,
         html,
@@ -1032,7 +1067,19 @@ pub fn parse_episode_detail(html: &str, url: &str) -> Value {
         }
         servers.push(json!({"name":name,"id":id,"embedUrl":embed,"hasDirectStream":false}));
     }
-    json!({"url":url,"title":title,"episodeNum":episode,"poster":poster(html),"seriesUrl":series,"servers":servers,"directStreams":[],"source":"krmzi","isSuccess":true})
+    json!({
+        "url": url,
+        "title": if episode.is_empty() { title.clone() } else { format!("الحلقة {episode}") },
+        "seriesTitle": series_title,
+        "episodeNum": episode,
+        "poster": poster(html),
+        "seriesUrl": series,
+        "servers": servers,
+        "directStreams": [],
+        "source": "krmzi",
+        "edition": edition,
+        "isSuccess": true
+    })
 }
 
 fn scalar_string(value: &Value) -> String {

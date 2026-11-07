@@ -323,12 +323,14 @@ fn title_ui(episode: &Value) {
     let season_str = catalogue::season(episode);
     let ep_num_str = catalogue::episode_number(episode);
     let season_val = season_str.parse::<usize>().unwrap_or(1);
+    let ed = catalogue::edition(episode);
+    let ed_tag = if ed == "dubbed" { " · مدبلج" } else { " · مترجم" };
 
     let sub_title = if !ep_num_str.is_empty() {
         if season_val > 1 {
-            format!("الموسم {} · الحلقة {}", season_val, ep_num_str)
+            format!("الموسم {} · الحلقة {}{}", season_val, ep_num_str, ed_tag)
         } else {
-            format!("الحلقة {}", ep_num_str)
+            format!("الحلقة {}{}", ep_num_str, ed_tag)
         }
     } else {
         let clean_ep = catalogue::clean_title(&ep_title);
@@ -339,7 +341,7 @@ fn title_ui(episode: &Value) {
                 .unwrap_or(&clean_ep)
                 .trim();
             if !stripped.is_empty() {
-                stripped.to_owned()
+                format!("{}{}", stripped, ed_tag)
             } else {
                 String::new()
             }
@@ -1151,6 +1153,22 @@ pub fn open_sources() {
     if !found {
         content.push_str(&format!("<button class=\"sheet-row\" data-player-action=\"discover\" data-source=\"{other}\"><span>ابحث عن نفس العمل في {}</span><i class=\"fa-solid fa-arrow-right-arrow-left\"></i></button>",source_name(other)));
     }
+
+    let ed = catalogue::edition(&episode);
+    let is_dubbed = ed == "dubbed";
+    let target_ed = if is_dubbed { "original" } else { "dubbed" };
+    let target_label = if is_dubbed { "المترجمة" } else { "المدبلجة" };
+    let target_pill = if is_dubbed {
+        "<span class=\"sheet-pill subbed\"><i class=\"fa-solid fa-closed-captioning\"></i> مترجم</span>"
+    } else {
+        "<span class=\"sheet-pill dubbed\"><i class=\"fa-solid fa-microphone\"></i> مدبلج</span>"
+    };
+    content.push_str(&format!(
+        "<button class=\"sheet-row highlight-edition\" data-player-action=\"switch-edition\" data-edition=\"{}\"><span>التبديل إلى النسخة {}</span>{}</button>",
+        target_ed,
+        target_label,
+        target_pill
+    ));
     if !rows(&episode, "directStreams").is_empty() {
         content.push_str(&format!("<button class=\"sheet-row\" data-player-action=\"direct\"><span>مشغّل {} المباشر</span><span class=\"sheet-pill\">{}</span></button>",source_name(current_source),if STATE.with(|c|c.borrow().embedded.is_none()){"الحالي"}else{"تشغيل"}));
     }
@@ -1205,19 +1223,25 @@ fn discover(source: String) {
     } else {
         s(&episode, "title")
     };
-    let identity = json!({"title":title,"aliases":if episode["aliases"].is_array(){&episode["aliases"]}else{&series["aliases"]},"year":series["year"],"type":"series","edition":catalogue::edition(&episode)});
+    let clean = catalogue::clean_series_title(&title);
+    let identity = json!({
+        "title": clean.clone(),
+        "aliases": if episode["aliases"].is_array() { &episode["aliases"] } else { &series["aliases"] },
+        "year": series["year"],
+        "type": "series",
+        "edition": catalogue::edition(&episode)
+    });
     let (session, generation, controller) =
         begin_switch(&format!("البحث في {}", source_name(&source)));
     spawn_local(async move {
         let signal = controller.as_ref().map(|c| c.signal());
-        let clean = catalogue::clean_title(&title);
         let mut queries = vec![clean.clone()];
         if clean != title && !title.is_empty() {
             queries.push(title.clone());
         }
         if let Some(aliases) = identity["aliases"].as_array() {
             for a in aliases.iter().filter_map(Value::as_str) {
-                let clean_a = catalogue::clean_title(a);
+                let clean_a = catalogue::clean_series_title(a);
                 if !clean_a.is_empty() && !queries.contains(&clean_a) {
                     queries.push(clean_a);
                 }
@@ -1235,13 +1259,103 @@ fn discover(source: String) {
                 return;
             }
             if let Some(candidate) = result.ok().and_then(|v| catalogue::find_counterpart(&identity, &rows(&v, "results"))) {
-                switch_provider(s(&candidate, "url"));
+                let url = if !s(&candidate, "seriesUrl").is_empty() {
+                    s(&candidate, "seriesUrl")
+                } else {
+                    s(&candidate, "url")
+                };
+                switch_provider(url);
                 return;
             }
         }
         app::open_sheet(
             "ما لقينا تطابقاً مؤكداً",
             "<p class=\"empty-note\">المسلسل غير متاح أو اسمه مختلف في المصدر الآخر. المشاهدة الحالية مستمرة.</p>",
+        );
+    });
+}
+fn switch_edition(target_edition: String) {
+    let Some(episode) = episode_identity() else {
+        return;
+    };
+    let series = STATE.with(|c| c.borrow().series.clone());
+    let title = if !s(&episode, "seriesTitle").is_empty() {
+        s(&episode, "seriesTitle")
+    } else if !s(&series, "title").is_empty() {
+        s(&series, "title")
+    } else {
+        s(&episode, "title")
+    };
+    let clean = catalogue::clean_series_title(&title);
+    let identity = json!({
+        "title": clean.clone(),
+        "aliases": if episode["aliases"].is_array() { &episode["aliases"] } else { &series["aliases"] },
+        "year": series["year"],
+        "type": "series",
+        "edition": &target_edition
+    });
+    let current_source = catalogue::provider(&episode).to_string();
+    let other_source = if current_source == "cinemana" { "krmzi".to_string() } else { "cinemana".to_string() };
+    let target_label = if target_edition == "dubbed" { "المدبلجة" } else { "المترجمة" };
+
+    let (session, generation, controller) = begin_switch(&format!("البحث عن النسخة {target_label}"));
+    spawn_local(async move {
+        let signal = controller.as_ref().map(|c| c.signal());
+        // 1. First look in known_series for counterpart with target_edition
+        let known = app::known_series();
+        if let Some(candidate) = catalogue::find_counterpart_with_edition(&identity, &known, Some(&target_edition)) {
+            let url = if !s(&candidate, "seriesUrl").is_empty() {
+                s(&candidate, "seriesUrl")
+            } else {
+                s(&candidate, "url")
+            };
+            switch_provider(url);
+            return;
+        }
+
+        // 2. Search on current source first, then other source
+        let mut queries = vec![clean.clone()];
+        if target_edition == "dubbed" {
+            queries.push(format!("{clean} مدبلج"));
+        } else {
+            queries.push(format!("{clean} مترجم"));
+        }
+        if let Some(aliases) = identity["aliases"].as_array() {
+            for a in aliases.iter().filter_map(Value::as_str) {
+                let clean_a = catalogue::clean_series_title(a);
+                if !clean_a.is_empty() && !queries.contains(&clean_a) {
+                    queries.push(clean_a);
+                }
+            }
+        }
+        for src in [&current_source, &other_source] {
+            for q in &queries {
+                let result = api::call_with_signal(
+                    "/api/search",
+                    &[("q", q.clone())],
+                    Some(src),
+                    signal.as_ref(),
+                )
+                .await;
+                if !switch_current(session, generation, &controller) {
+                    return;
+                }
+                if let Some(candidate) = result.ok().and_then(|v| {
+                    catalogue::find_counterpart_with_edition(&identity, &rows(&v, "results"), Some(&target_edition))
+                }) {
+                    let url = if !s(&candidate, "seriesUrl").is_empty() {
+                        s(&candidate, "seriesUrl")
+                    } else {
+                        s(&candidate, "url")
+                    };
+                    switch_provider(url);
+                    return;
+                }
+            }
+        }
+        app::open_sheet(
+            "النسخة غير متاحة",
+            &format!("<p class=\"empty-note\">لم نجد النسخة {target_label} لهذا المسلسل في السيرفرات الحالية. المشاهدة الحالية مستمرة.</p>"),
         );
     });
 }
@@ -1913,6 +2027,7 @@ fn action(row: Element) {
         "sources" => open_sources(),
         "provider" => switch_provider(url),
         "discover" => discover(row.get_attribute("data-source").unwrap_or_default()),
+        "switch-edition" => switch_edition(row.get_attribute("data-edition").unwrap_or_default()),
         "browse-source" => app::open_series(url),
         "season" => {
             STATE.with(|c| {
@@ -2104,13 +2219,6 @@ fn remote_arrow(key: &str) {
                 && node.offset_height() > 0
                 && !node.has_attribute("disabled")
                 && node.closest(".hidden,.hud-hidden").ok().flatten().is_none()
-                && window()
-                    .get_computed_style(node)
-                    .ok()
-                    .flatten()
-                    .is_some_and(|style| {
-                        style.get_property_value("visibility").unwrap_or_default() != "hidden"
-                    })
         })
         .collect::<Vec<_>>();
     let Some(current) = document().active_element() else {

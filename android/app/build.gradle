@@ -20,8 +20,8 @@ android {
         applicationId "com.krmzi.app"
         minSdk 24
         targetSdk 34
-        versionCode 21
-        versionName "2.6.0"
+        versionCode 22
+        versionName "2.6.1"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }

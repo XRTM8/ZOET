@@ -10,7 +10,7 @@ async function run(){
     const page=await context.newPage();page.on('pageerror',error=>failures.push(error.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     await page.waitForFunction(()=>!!navigator.serviceWorker.controller,null,{timeout:15000});
-    const cached=await page.evaluate(async()=>{const cache=await caches.open('zoet-shell-2.6.0');return (await cache.keys()).map(request=>new URL(request.url).pathname);});
+    const cached=await page.evaluate(async()=>{const cache=await caches.open('zoet-shell-2.6.1');return (await cache.keys()).map(request=>new URL(request.url).pathname);});
     assert(cached.includes('/wasm/otium_ui_bg.wasm'));
     assert(cached.includes('/wasm/otium_ui.js'));
     assert(!cached.some(path=>path.startsWith('/api/')),'No stale signed stream/API data in browser platform cache');

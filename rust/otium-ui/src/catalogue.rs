@@ -213,12 +213,38 @@ pub fn clean_title(title: &str) -> String {
     clean.trim().to_owned()
 }
 
+pub fn clean_series_title(title: &str) -> String {
+    let base = clean_title(title);
+    if let Some((clean, _)) = base.split_once("الحلقة") {
+        clean.trim().to_owned()
+    } else {
+        base
+    }
+}
+
 fn titles(value: &Value) -> Vec<String> {
     let mut titles = vec![normalized(&field(value, "title"))];
     let clean = clean_title(&field(value, "title"));
     let norm_clean = normalized(&clean);
     if !norm_clean.is_empty() {
         titles.push(norm_clean);
+    }
+    let series_clean = clean_series_title(&field(value, "title"));
+    let norm_series = normalized(&series_clean);
+    if !norm_series.is_empty() {
+        titles.push(norm_series);
+    }
+    let s_title = field(value, "seriesTitle");
+    if !s_title.is_empty() {
+        let norm_s = normalized(&s_title);
+        if !norm_s.is_empty() {
+            titles.push(norm_s);
+        }
+        let clean_s = clean_series_title(&s_title);
+        let norm_clean_s = normalized(&clean_s);
+        if !norm_clean_s.is_empty() {
+            titles.push(norm_clean_s);
+        }
     }
     if let Some(aliases) = value["aliases"].as_array() {
         titles.extend(aliases.iter().filter_map(Value::as_str).map(normalized));
@@ -421,10 +447,7 @@ pub fn match_episode_cross_season(
     let abs_k = if cur_season_int > 1 {
         let prior_count = current_all
             .iter()
-            .filter(|e| {
-                season(e).parse::<usize>().unwrap_or(1) < cur_season_int
-                    && edition(e) == edition(current)
-            })
+            .filter(|e| season(e).parse::<usize>().unwrap_or(1) < cur_season_int)
             .count();
         if prior_count > 0 {
             prior_count + cur_num_int
@@ -446,7 +469,6 @@ pub fn match_episode_cross_season(
     // Group target seasons
     let mut target_seasons: Vec<usize> = target_all
         .iter()
-        .filter(|e| edition(e) == edition(current))
         .map(|e| season(e).parse::<usize>().unwrap_or(1))
         .collect();
     target_seasons.sort_unstable();
@@ -458,10 +480,7 @@ pub fn match_episode_cross_season(
         for s_num in target_seasons {
             let season_eps: Vec<&Value> = target_all
                 .iter()
-                .filter(|e| {
-                    season(e).parse::<usize>().unwrap_or(1) == s_num
-                        && edition(e) == edition(current)
-                })
+                .filter(|e| season(e).parse::<usize>().unwrap_or(1) == s_num)
                 .collect();
             let count = season_eps.len();
             if rem <= count {
@@ -483,35 +502,49 @@ pub fn match_episode_cross_season(
     } else {
         // Target is flat-numbered (e.g. Krmzi)
         if let Some(target) = target_all.iter().find(|e| {
-            edition(e) == edition(current) && episode_number(e) == abs_k.to_string()
+            episode_number(e) == abs_k.to_string()
         }) {
             return Some((*target).clone());
         }
     }
 
-    // Fallback: match by 0-based position in target_all
-    let compatible: Vec<&Value> = target_all
+    // Direct match fallback (same season and episode number)
+    if let Some(direct) = target_all
         .iter()
-        .filter(|e| edition(e) == edition(current))
-        .collect();
-    if abs_k > 0 && abs_k <= compatible.len() {
-        return Some((*compatible[abs_k - 1]).clone());
+        .find(|e| episode_number(e) == cur_num && season(e) == cur_season)
+    {
+        return Some(direct.clone());
+    }
+
+    // Fallback: match by 0-based position in target_all
+    if abs_k > 0 && abs_k <= target_all.len() {
+        return Some(target_all[abs_k - 1].clone());
     }
 
     None
 }
 
 pub fn find_counterpart(item: &Value, candidates: &[Value]) -> Option<Value> {
+    find_counterpart_with_edition(item, candidates, None)
+}
+
+pub fn find_counterpart_with_edition(
+    item: &Value,
+    candidates: &[Value],
+    target_edition: Option<&str>,
+) -> Option<Value> {
     let titles = titles(item);
-    if titles.is_empty() || kind(item) != "series" {
+    if titles.is_empty() || (kind(item) != "series" && field(item, "seriesUrl").is_empty()) {
         return None;
     }
     let year = field(item, "year");
+    let desired_edition = target_edition.unwrap_or_else(|| edition(item));
+
     let matches: Vec<Value> = candidates
         .iter()
         .filter(|candidate| {
-            kind(candidate) == "series"
-                && edition(item) == edition(candidate)
+            (kind(candidate) == "series" || !field(candidate, "seriesUrl").is_empty())
+                && edition(candidate) == desired_edition
                 && compatible_year(&year, &field(candidate, "year"))
                 && self::titles(candidate)
                     .iter()
@@ -528,8 +561,8 @@ pub fn find_counterpart(item: &Value, candidates: &[Value]) -> Option<Value> {
         let fuzzy: Vec<Value> = candidates
             .iter()
             .filter(|candidate| {
-                kind(candidate) == "series"
-                    && edition(item) == edition(candidate)
+                (kind(candidate) == "series" || !field(candidate, "seriesUrl").is_empty())
+                    && edition(candidate) == desired_edition
                     && compatible_year(&year, &field(candidate, "year"))
                     && self::titles(candidate).iter().any(|ct| {
                         titles.iter().any(|t| {
@@ -574,7 +607,13 @@ mod tests {
             find_counterpart(&original, &[dubbed.clone(), alternate]).unwrap()["url"],
             "cinemana:1320095"
         );
-        assert!(find_counterpart(&original, &[dubbed]).is_none());
+        assert!(find_counterpart(&original, &[dubbed.clone()]).is_none());
+        assert_eq!(
+            find_counterpart_with_edition(&original, &[dubbed], Some("dubbed")).unwrap()["url"],
+            "cinemana:3129341"
+        );
+        assert_eq!(clean_series_title("مسلسل تحت الارض الحلقة 16"), "تحت الارض");
+        assert_eq!(clean_series_title("مسلسل هذا البحر سوف يفيض مترجم الحلقة 5"), "هذا البحر سوف يفيض");
         assert!(match_episode(
             &json!({"episodeNum":2,"edition":"original"}),
             &[json!({"episodeNum":2,"aliases":["Series Dubbed"]})]
