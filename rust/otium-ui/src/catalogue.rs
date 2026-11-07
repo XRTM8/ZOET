@@ -28,6 +28,12 @@ pub fn normalized(value: &str) -> String {
             '\u{064b}'..='\u{065f}' | '\u{0670}' | '\u{0640}' => None,
             'أ' | 'إ' | 'آ' | 'ٱ' => Some('ا'),
             'ى' => Some('ي'),
+            'ç' => Some('c'),
+            'ğ' => Some('g'),
+            'ı' => Some('i'),
+            'ö' => Some('o'),
+            'ş' => Some('s'),
+            'ü' => Some('u'),
             char if char.is_alphanumeric() => Some(digit(char)),
             _ => Some(' '),
         })
@@ -35,7 +41,7 @@ pub fn normalized(value: &str) -> String {
     let mut words: Vec<&str> = clean.split_whitespace().collect();
     if words
         .first()
-        .is_some_and(|word| ["مسلسل", "فيلم"].contains(word))
+        .is_some_and(|word| ["مسلسل", "فيلم", "dizi", "film", "series", "movie"].contains(word))
     {
         words.remove(0);
     }
@@ -52,6 +58,7 @@ pub fn normalized(value: &str) -> String {
         if [
             "قرمزي", "كامل", "بالعربية", "للعربية", "مترجم", "مترجمة", "مدبلج",
             "مدبلجة", "اونلاين", "اون", "لاين", "dubbed", "dub", "subbed", "sub",
+            "turkish", "turkce", "bolum", "dizi", "season", "sezon",
         ]
         .contains(last)
         {
@@ -243,6 +250,23 @@ pub fn clean_series_title(title: &str) -> String {
     }
 }
 
+pub fn slug_from_url(url: &str) -> Option<String> {
+    if !url.starts_with("http") {
+        return None;
+    }
+    let trimmed = url.trim_end_matches('/');
+    let last_seg = trimmed.rsplit('/').next()?;
+    if last_seg.is_empty()
+        || last_seg.contains('.')
+        || last_seg.chars().all(|c| c.is_ascii_digit())
+        || ["series", "episode", "movies", "film", "page"].contains(&last_seg)
+    {
+        return None;
+    }
+    let with_spaces = last_seg.replace('-', " ").replace('_', " ");
+    Some(with_spaces)
+}
+
 fn titles(value: &Value) -> Vec<String> {
     let mut titles = vec![normalized(&field(value, "title"))];
     let clean = clean_title(&field(value, "title"));
@@ -267,6 +291,27 @@ fn titles(value: &Value) -> Vec<String> {
             titles.push(norm_clean_s);
         }
     }
+    for key in ["en_title", "ar_title", "other_title"] {
+        let val = field(value, key);
+        if !val.is_empty() {
+            let norm = normalized(&val);
+            if !norm.is_empty() {
+                titles.push(norm);
+            }
+            let clean = clean_series_title(&val);
+            let norm_clean = normalized(&clean);
+            if !norm_clean.is_empty() {
+                titles.push(norm_clean);
+            }
+        }
+    }
+    let url_str = field(value, "url");
+    if let Some(slug) = slug_from_url(&url_str) {
+        let norm_slug = normalized(&slug);
+        if !norm_slug.is_empty() {
+            titles.push(norm_slug);
+        }
+    }
     if let Some(aliases) = value["aliases"].as_array() {
         titles.extend(aliases.iter().filter_map(Value::as_str).map(normalized));
     }
@@ -277,6 +322,22 @@ fn titles(value: &Value) -> Vec<String> {
             let norm_offer = normalized(&clean_offer);
             if !norm_offer.is_empty() {
                 titles.push(norm_offer);
+            }
+            for key in ["en_title", "ar_title", "other_title"] {
+                let val = field(offer, key);
+                if !val.is_empty() {
+                    let norm = normalized(&val);
+                    if !norm.is_empty() {
+                        titles.push(norm);
+                    }
+                }
+            }
+            let offer_url = field(offer, "url");
+            if let Some(slug) = slug_from_url(&offer_url) {
+                let norm_slug = normalized(&slug);
+                if !norm_slug.is_empty() {
+                    titles.push(norm_slug);
+                }
             }
             if let Some(aliases) = offer["aliases"].as_array() {
                 titles.extend(aliases.iter().filter_map(Value::as_str).map(normalized));
@@ -851,5 +912,42 @@ mod tests {
         let krmzi_15 = &krmzi_episodes[14];
         let matched_15 = match_episode_cross_season(krmzi_15, &krmzi_episodes, &cinemana_episodes).unwrap();
         assert_eq!(matched_15["url"], "cinemana:1:15");
+    }
+
+    #[test]
+    fn turkish_and_english_cross_source_matching() {
+        // Case 1: Cinemana has Turkish title with diacritics: "Taşacak Bu Deniz" & Arabic: "هذا البحر سوف يفيض"
+        let cinemana = json!({
+            "url": "cinemana:100",
+            "ar_title": "هذا البحر سوف يفيض",
+            "en_title": "Taşacak Bu Deniz",
+            "mediaType": "series",
+            "year": 2025
+        });
+        // Krmzi has Arabic title and Turkish slug in URL
+        let krmzi = json!({
+            "url": "https://krmzi.org/series/tasacak-bu-deniz/",
+            "title": "مسلسل هذا البحر سوف يفيض مترجم",
+            "type": "series",
+            "year": 2025
+        });
+        let merged = merge(&[cinemana, krmzi], "cinemana");
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0]["offers"].as_array().unwrap().len(), 2);
+
+        // Case 2: One source has ONLY Turkish name with special chars: "Çukur", another has URL slug "cukur" and Arabic "الحفرة"
+        let cukur_cinemana = json!({
+            "url": "cinemana:200",
+            "en_title": "Çukur",
+            "mediaType": "series"
+        });
+        let cukur_krmzi = json!({
+            "url": "https://krmzi.org/series/cukur/",
+            "title": "مسلسل الحفرة مترجم",
+            "type": "series"
+        });
+        let merged_cukur = merge(&[cukur_cinemana, cukur_krmzi], "cinemana");
+        assert_eq!(merged_cukur.len(), 1);
+        assert_eq!(merged_cukur[0]["offers"].as_array().unwrap().len(), 2);
     }
 }

@@ -1255,6 +1255,21 @@ fn discover(source: String) {
                 }
             }
         }
+        for key in ["en_title", "other_title"] {
+            let val = s(&series, key);
+            if !val.is_empty() {
+                let clean_val = catalogue::clean_series_title(&val);
+                if !clean_val.is_empty() && !queries.contains(&clean_val) {
+                    queries.push(clean_val);
+                }
+            }
+        }
+        if let Some(slug) = catalogue::slug_from_url(&s(&series, "url")) {
+            let clean_slug = catalogue::clean_series_title(&slug);
+            if !clean_slug.is_empty() && !queries.contains(&clean_slug) {
+                queries.push(clean_slug);
+            }
+        }
         for q in queries {
             let result = api::call_with_signal(
                 "/api/search",
@@ -1351,6 +1366,21 @@ fn switch_edition(target_edition: String, direct_url: Option<String>) {
                 if !clean_a.is_empty() && !queries.contains(&clean_a) {
                     queries.push(clean_a);
                 }
+            }
+        }
+        for key in ["en_title", "other_title"] {
+            let val = s(&series, key);
+            if !val.is_empty() {
+                let clean_val = catalogue::clean_series_title(&val);
+                if !clean_val.is_empty() && !queries.contains(&clean_val) {
+                    queries.push(clean_val);
+                }
+            }
+        }
+        if let Some(slug) = catalogue::slug_from_url(&s(&series, "url")) {
+            let clean_slug = catalogue::clean_series_title(&slug);
+            if !clean_slug.is_empty() && !queries.contains(&clean_slug) {
+                queries.push(clean_slug);
             }
         }
         for src in [&current_source, &other_source] {

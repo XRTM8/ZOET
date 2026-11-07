@@ -961,8 +961,43 @@ fn switch_detail_edition(target_edition: String, title: String) {
         let mut queries = vec![clean.clone()];
         if target_edition == "dubbed" {
             queries.push(format!("{clean} مدبلج"));
+            queries.push(format!("مسلسل {clean} مدبلج"));
         } else {
             queries.push(format!("{clean} مترجم"));
+            queries.push(format!("مسلسل {clean}"));
+        }
+        let current_series = STATE.with(|state| state.borrow().context.clone());
+        if let Some(aliases) = current_series["aliases"].as_array() {
+            for a in aliases.iter().filter_map(Value::as_str) {
+                let clean_a = catalogue::clean_series_title(a);
+                if !clean_a.is_empty() && !queries.contains(&clean_a) {
+                    queries.push(clean_a.clone());
+                    if target_edition == "dubbed" {
+                        queries.push(format!("{clean_a} مدبلج"));
+                    }
+                }
+            }
+        }
+        for key in ["en_title", "other_title"] {
+            let val = s(&current_series, key);
+            if !val.is_empty() {
+                let clean_val = catalogue::clean_series_title(&val);
+                if !clean_val.is_empty() && !queries.contains(&clean_val) {
+                    queries.push(clean_val.clone());
+                    if target_edition == "dubbed" {
+                        queries.push(format!("{clean_val} مدبلج"));
+                    }
+                }
+            }
+        }
+        if let Some(slug) = catalogue::slug_from_url(&s(&current_series, "url")) {
+            let clean_slug = catalogue::clean_series_title(&slug);
+            if !clean_slug.is_empty() && !queries.contains(&clean_slug) {
+                queries.push(clean_slug.clone());
+                if target_edition == "dubbed" {
+                    queries.push(format!("{clean_slug} مدبلج"));
+                }
+            }
         }
         for src in [&preferred, other] {
             for q in &queries {
