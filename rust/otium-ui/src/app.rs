@@ -10,6 +10,8 @@ use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{AbortController, Element, Event, HtmlElement, HtmlInputElement, KeyboardEvent};
 
+const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 #[derive(Default)]
 struct Page {
     items: Vec<Value>,
@@ -267,7 +269,35 @@ fn card(item: &Value) -> String {
     } else {
         "episode"
     };
-    let thumbnail = s(item, "thumbnail");
+    let thumbnail = {
+        let t = s(item, "thumbnail");
+        if !t.is_empty() {
+            t
+        } else {
+            let p = s(item, "poster");
+            if !p.is_empty() {
+                p
+            } else {
+                let a = s(item, "artwork");
+                if !a.is_empty() {
+                    a
+                } else {
+                    let m = s(item, "imgObjUrl");
+                    if !m.is_empty() {
+                        m
+                    } else {
+                        s(item, "imgMediumThumbObjUrl")
+                    }
+                }
+            }
+        }
+    };
+    let raw_title = s(item, "title");
+    let trimmed = raw_title
+        .trim_end_matches(" - قرمزي")
+        .trim_end_matches("- قرمزي")
+        .trim();
+    let title = if trimmed.is_empty() { &raw_title } else { trimmed };
     let sources = item["sources"]
         .as_array()
         .cloned()
@@ -296,7 +326,7 @@ fn card(item: &Value) -> String {
         .collect::<String>();
     let year = s(item, "year");
     let rating = s(item, "rating");
-    format!("<button class=\"series-tile\" data-action=\"{kind}\" data-url=\"{}\"><span class=\"poster-frame\"><img class=\"series-tile-thumb\" src=\"{}\" alt=\"\" loading=\"lazy\" decoding=\"async\" referrerpolicy=\"no-referrer\">{edition_badge}</span><span class=\"series-tile-body\"><span class=\"series-tile-title\">{}</span><span class=\"series-tile-sub\">{}{}</span><span class=\"catalogue-sources\">{badges}</span></span></button>",esc(&s(item,"url")),esc(&thumbnail),esc(&s(item,"title")),esc(&year),if rating.is_empty(){String::new()}else{format!(" · ★ {}",esc(&rating))})
+    format!("<button class=\"series-tile\" data-action=\"{kind}\" data-url=\"{}\"><span class=\"poster-frame\"><img class=\"series-tile-thumb\" src=\"{}\" alt=\"\" loading=\"lazy\" decoding=\"async\" referrerpolicy=\"no-referrer\">{edition_badge}</span><span class=\"series-tile-body\"><span class=\"series-tile-title\">{}</span><span class=\"series-tile-sub\">{}{}</span><span class=\"catalogue-sources\">{badges}</span></span></button>",esc(&s(item,"url")),esc(&thumbnail),esc(&title),esc(&year),if rating.is_empty(){String::new()}else{format!(" · ★ {}",esc(&rating))})
 }
 fn render_grid(id: &str, items: &[Value]) {
     let grid = el(id);
@@ -937,10 +967,7 @@ fn switch_detail_edition(target_edition: String, title: String) {
         state.sheet_generation
     });
     let label = if target_edition == "dubbed" { "المدبلجة" } else { "المترجمة" };
-    open_sheet(
-        "تفاصيل المسلسل",
-        &format!("<div class=\"detail-loading\"><div class=\"spinner-ring\"></div><p>جاري البحث عن النسخة {}…</p></div>", label),
-    );
+    notify(&format!("جاري البحث عن النسخة {}…", label));
     spawn_local(async move {
         let clean = catalogue::clean_series_title(&title);
         let dummy = json!({"title": clean.clone(), "edition": target_edition, "type": "series"});
@@ -1020,10 +1047,9 @@ fn switch_detail_edition(target_edition: String, title: String) {
                 }
             }
         }
-        open_sheet(
-            "النسخة غير متاحة",
-            &format!("<p class=\"empty-note\">لم يتم العثور على نسخة {} لهذا المسلسل في السيرفرات الحالية.</p>", label),
-        );
+        if STATE.with(|state| state.borrow().sheet_generation) == token {
+            notify(&format!("النسخة {} غير متوفرة لهذا العمل حالياً", label));
+        }
     });
 }
 fn render_detail_episodes() {
@@ -1114,7 +1140,7 @@ fn click(event: Event) {
                 switch_detail_edition(target_edition, title);
             }
         }
-        Some("episode") => {
+        Some("movie") | Some("episode") => {
             close_sheet();
             search_close_if_open();
             player::open_episode(url, None);
@@ -1449,7 +1475,7 @@ fn check_updates(manual: bool) {
             Ok(data) => {
                 let version = s(&data, "tag_name");
                 let remote = parse_version(&version);
-                let local = parse_version("2.6.1");
+                let local = parse_version(APP_VERSION);
                 if remote.is_empty() || remote <= local {
                     if manual {
                         notify("أنت تستخدم آخر إصدار");
@@ -1508,7 +1534,7 @@ pub fn init() {
     }
     apply_display();
     update_source();
-    text("installedVersionText", "v2.6.1");
+    text("installedVersionText", &format!("v{APP_VERSION}"));
     on("tabSeries", "click", |_| set_view("series"));
     on("tabMovies", "click", |_| set_view("movies"));
     on("openLibraryBtn", "click", |_| set_view("library"));

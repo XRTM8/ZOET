@@ -1722,6 +1722,8 @@ pub fn close() {
     release_media();
     show("mobilePlayer", false);
     show("playerSpinner", false);
+    show("skipIntroBtn", false);
+    show("autoNextCard", false);
     bridge("setVideoPlaying", false.into());
     bridge("setLandscape", false.into());
     if document().fullscreen_element().is_some() {
@@ -1804,6 +1806,12 @@ fn progress() {
         if cancel {
             show("autoNextCard", false);
         }
+    }
+    let is_series_ep = STATE.with(|c| c.borrow().episode.is_some());
+    if is_series_ep && time >= 10. && time <= 90. && duration > 180. {
+        show("skipIntroBtn", true);
+    } else {
+        show("skipIntroBtn", false);
     }
     save_history(false);
 }
@@ -2460,7 +2468,10 @@ pub fn init() {
         seek(10.);
         show_hud(true);
     });
-    on("centerForward", "click", |_| seek(10.));
+    on("skipIntroBtn", "click", |_| {
+        seek(85.);
+        show("skipIntroBtn", false);
+    });
     on("openServersSheetBtn", "click", |_| open_sources());
     on("drawerOpenServersBtn", "click", |_| open_sources());
     on("openQualitySheetBtn", "click", |_| open_quality());

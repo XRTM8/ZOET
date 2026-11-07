@@ -1,7 +1,7 @@
 /* Browser platform cache. Catalogue and playback logic run in Rust/WASM. */
 'use strict';
-const CACHE='zoet-shell-2.6.1';
-const SHELL=['./','./index.html','./styles.css?v=2.6.1','./manifest.json','./wasm/otium_ui.js','./wasm/otium_ui_bg.wasm','./vendor/hls/hls.min.js','./fonts/tajawal.css','./icons/icon-192.png','./icons/icon-512.png','./vendor/fontawesome/css/all.min.css','./vendor/fontawesome/webfonts/fa-solid-900.woff2','./vendor/fontawesome/webfonts/fa-regular-400.woff2',...Array.from({length:10},(_,i)=>`./fonts/tajawal-${i+1}.woff2`)];
+const CACHE='zoet-shell-2.7.2';
+const SHELL=['./','./index.html','./styles.css?v=2.7.2','./manifest.json','./wasm/otium_ui.js','./wasm/otium_ui_bg.wasm','./vendor/hls/hls.min.js','./fonts/tajawal.css','./icons/icon-192.png','./icons/icon-512.png','./vendor/fontawesome/css/all.min.css','./vendor/fontawesome/webfonts/fa-solid-900.woff2','./vendor/fontawesome/webfonts/fa-regular-400.woff2',...Array.from({length:10},(_,i)=>`./fonts/tajawal-${i+1}.woff2`)];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil((async()=>{
   const names=await caches.keys();
