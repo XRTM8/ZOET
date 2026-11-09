@@ -118,13 +118,18 @@ def main():
 
     # Upload files
     files_to_upload = [
-        ('app-release.apk', 'release-output/app-release.apk'),
-        ('otium-play.apk', 'release-output/otium-play.apk'),
+        ('app-release.apk', 'release-output/app-release.apk', 'application/vnd.android.package-archive'),
+        ('otium-play.apk', 'release-output/otium-play.apk', 'application/vnd.android.package-archive'),
+        ('ZOET.exe', 'release-output/ZOET.exe', 'application/vnd.microsoft.portable-executable'),
     ]
 
     existing_assets = {a['name']: a['id'] for a in release_info.get('assets', [])}
 
-    for asset_name, asset_path in files_to_upload:
+    for asset_name, asset_path, mime_type in files_to_upload:
+        if not os.path.exists(asset_path):
+            print(f"Skipping {asset_name} (file not found)")
+            continue
+
         if asset_name in existing_assets:
             print(f"Asset {asset_name} already exists (ID: {existing_assets[asset_name]}), deleting first...")
             del_req = urllib.request.Request(
@@ -147,7 +152,7 @@ def main():
             data=file_data,
             headers={
                 **headers,
-                'Content-Type': 'application/vnd.android.package-archive',
+                'Content-Type': mime_type,
                 'Content-Length': str(len(file_data))
             }
         )
