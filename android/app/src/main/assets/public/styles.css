@@ -2616,4 +2616,40 @@ html[data-display='desktop'] .sheet-content:has(.series-detail-hero) .sheet-epis
   color: var(--text-dim);
 }
 
+/* Desktop Window Controls */
+.desktop-window-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.win-btn {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 11px;
+  transition: all 0.18s ease;
+}
+
+.win-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.win-btn.win-close:hover {
+  background: rgba(229, 57, 53, 0.85);
+  border-color: #e53935;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(229, 57, 53, 0.4);
+}
+
+
 

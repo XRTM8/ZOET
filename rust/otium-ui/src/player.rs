@@ -9,8 +9,9 @@ use std::cell::RefCell;
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use wasm_bindgen_futures::{spawn_local, JsFuture};
 use web_sys::{
-    AbortController, Element, Event, HtmlElement, HtmlInputElement, HtmlVideoElement,
-    KeyboardEvent, PointerEvent, TextTrackMode, WheelEvent,
+    AbortController, AudioContext, CanvasRenderingContext2d, DragEvent, Element, Event,
+    FileReader, GainNode, HtmlCanvasElement, HtmlElement, HtmlInputElement, HtmlVideoElement,
+    KeyboardEvent, PointerEvent, TextTrackCue, TextTrackMode, WheelEvent,
 };
 
 #[derive(Clone, Debug)]
@@ -92,6 +93,10 @@ struct Player {
     next_deadline: Option<f64>,
     next_cancelled: bool,
     season: String,
+    sub_offset: f64,
+    boost_volume: f64,
+    audio_context: Option<AudioContext>,
+    gain_node: Option<GainNode>,
 }
 impl Default for Player {
     fn default() -> Self {
@@ -133,6 +138,10 @@ impl Default for Player {
             next_deadline: None,
             next_cancelled: false,
             season: "1".into(),
+            sub_offset: 0.,
+            boost_volume: 1.0,
+            audio_context: None,
+            gain_node: None,
         }
     }
 }
@@ -1907,6 +1916,176 @@ pub fn toggle_theater() {
         "وضع المسرح: قائمة الحلقات الجانبية"
     });
 }
+fn ensure_audio_boost(v: &HtmlVideoElement) {
+    let connected = STATE.with(|c| c.borrow().gain_node.is_some());
+    if connected {
+        return;
+    }
+    if let Ok(ctx) = AudioContext::new() {
+        if let Ok(source) = ctx.create_media_element_source(v) {
+            if let Ok(gain) = ctx.create_gain() {
+                let _ = source.connect_with_audio_node(&gain);
+                let _ = gain.connect_with_audio_node(&ctx.destination());
+                STATE.with(|c| {
+                    let mut p = c.borrow_mut();
+                    p.audio_context = Some(ctx);
+                    p.gain_node = Some(gain);
+                });
+            }
+        }
+    }
+}
+pub fn adjust_volume(delta: f64) {
+    let v = video();
+    let current = STATE.with(|c| c.borrow().boost_volume);
+    let new_vol = (current + delta).clamp(0., 3.0);
+    STATE.with(|c| c.borrow_mut().boost_volume = new_vol);
+    v.set_muted(false);
+
+    if new_vol <= 1.0 {
+        v.set_volume(new_vol);
+        STATE.with(|c| {
+            if let Some(gain) = &c.borrow().gain_node {
+                gain.gain().set_value(1.0);
+            }
+        });
+        pill(&format!("الصوت {:.0}%", new_vol * 100.));
+    } else {
+        v.set_volume(1.0);
+        ensure_audio_boost(&v);
+        STATE.with(|c| {
+            if let Some(gain) = &c.borrow().gain_node {
+                gain.gain().set_value(new_vol as f32);
+            }
+        });
+        pill(&format!("مضخم الصوت: {:.0}% ⚡", new_vol * 100.));
+    }
+}
+pub fn adjust_sub_delay(delta_seconds: f64) {
+    let new_offset = STATE.with(|c| {
+        let mut p = c.borrow_mut();
+        p.sub_offset += delta_seconds;
+        p.sub_offset
+    });
+    let v = video();
+    if let Some(tracks) = v.text_tracks() {
+        for i in 0..tracks.length() {
+            if let Some(track) = tracks.get(i) {
+                if track.mode() == TextTrackMode::Showing {
+                    if let Some(cues) = track.cues() {
+                        for j in 0..cues.length() {
+                            if let Ok(cue_val) = js_sys::Reflect::get_u32(&cues, j) {
+                                if let Ok(cue) = cue_val.dyn_into::<TextTrackCue>() {
+                                    cue.set_start_time(cue.start_time() + delta_seconds);
+                                    cue.set_end_time(cue.end_time() + delta_seconds);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    pill(&format!("مزامنة الترجمة: {:+.2} ثانية", new_offset));
+}
+pub fn take_snapshot() {
+    let v = video();
+    let width = v.video_width();
+    let height = v.video_height();
+    if width == 0 || height == 0 {
+        pill("الفيديو غير متاح لالتقاط الصورة");
+        return;
+    }
+    let Ok(canvas) = document().create_element("canvas") else { return; };
+    let Ok(canvas) = canvas.dyn_into::<HtmlCanvasElement>() else { return; };
+    canvas.set_width(width);
+    canvas.set_height(height);
+    let Ok(Some(ctx_obj)) = canvas.get_context("2d") else { return; };
+    let Ok(ctx) = ctx_obj.dyn_into::<CanvasRenderingContext2d>() else { return; };
+    if ctx.draw_image_with_html_video_element(&v, 0., 0.).is_err() {
+        pill("تعذر التقاط لقطة الشاشة لمصدر البث");
+        return;
+    }
+    if let Ok(data_url) = canvas.to_data_url() {
+        if let Ok(link) = document().create_element("a") {
+            let title = STATE.with(|c| {
+                c.borrow().episode.as_ref().map(|e| s(e, "title")).unwrap_or_else(|| "ZOET".into())
+            });
+            let clean_title = title.replace(' ', "_");
+            let _ = link.set_attribute("href", &data_url);
+            let _ = link.set_attribute("download", &format!("ZOET_{clean_title}_{:.0}.png", v.current_time()));
+            if let Ok(link_el) = link.dyn_into::<HtmlElement>() {
+                link_el.click();
+                pill("تم حفظ لقطة الشاشة 📷");
+                return;
+            }
+        }
+    }
+    pill("تعذر استخراج صورة المشهد لمصدر البث");
+}
+pub fn init_sub_drag_and_drop() {
+    on("playerCanvas", "dragover", |event| {
+        if let Ok(event) = event.dyn_into::<DragEvent>() {
+            event.prevent_default();
+        }
+    });
+    on("playerCanvas", "drop", |event| {
+        if let Ok(event) = event.dyn_into::<DragEvent>() {
+            event.prevent_default();
+            let Some(dt) = event.data_transfer() else { return; };
+            let Some(files) = dt.files() else { return; };
+            if files.length() == 0 { return; };
+            let Some(file) = files.item(0) else { return; };
+            let name = file.name();
+            let lower = name.to_lowercase();
+            if !lower.ends_with(".srt") && !lower.ends_with(".vtt") {
+                pill("يرجى إفلات ملف ترجمة بصيغة .srt أو .vtt");
+                return;
+            }
+            let Ok(reader) = FileReader::new() else { return; };
+            let reader_clone = reader.clone();
+            let file_name = name.clone();
+            let is_srt = lower.ends_with(".srt");
+            let onload = Closure::wrap(Box::new(move |_: Event| {
+                if let Ok(result) = reader_clone.result() {
+                    if let Some(text) = result.as_string() {
+                        let vtt_text = if is_srt {
+                            let re = js_sys::RegExp::new(r"(\d{2}:\d{2}:\d{2}),(\d{3})", "g");
+                            let converted = js_sys::JsString::from(text.as_str()).replace_by_pattern(&re, "$1.$2");
+                            format!("WEBVTT\n\n{}", converted)
+                        } else {
+                            text
+                        };
+                        let array = js_sys::Array::new();
+                        array.push(&JsValue::from_str(&vtt_text));
+                        let Ok(blob) = web_sys::Blob::new_with_str_sequence(&array) else { return; };
+                        if let Ok(url) = web_sys::Url::create_object_url_with_blob(&blob) {
+                            let v = video();
+                            if let Ok(node) = document().create_element("track") {
+                                let _ = node.set_attribute("kind", "subtitles");
+                                let _ = node.set_attribute("label", &format!("ترجمة: {}", file_name));
+                                let _ = node.set_attribute("srclang", "ar");
+                                let _ = node.set_attribute("src", &url);
+                                let _ = node.set_attribute("default", "true");
+                                let _ = v.append_child(&node);
+                                if let Some(tracks) = v.text_tracks() {
+                                    if let Some(last) = tracks.get(tracks.length() - 1) {
+                                        last.set_mode(TextTrackMode::Showing);
+                                    }
+                                }
+                                show("toggleSubtitlesBtn", true);
+                                pill(&format!("تم تحميل الترجمة: {}", file_name));
+                            }
+                        }
+                    }
+                }
+            }) as Box<dyn FnMut(Event)>);
+            reader.set_onload(Some(onload.as_ref().unchecked_ref()));
+            onload.forget();
+            let _ = reader.read_as_text(&file);
+        }
+    });
+}
 fn next_episode() {
     let next = STATE.with(|c| {
         let p = c.borrow();
@@ -2081,6 +2260,9 @@ pub fn controls_help() {
         ("M", "كتم الصوت"),
         ("F / P", "ملء الشاشة / صورة مصغرة"),
         ("T", "وضع المسرح / شاشة عريضة"),
+        ("B", "مضخم الصوت حتى 300% ⚡"),
+        ("G / H", "مزامنة الترجمة (- / +)"),
+        ("Shift+S", "التقاط لقطة شاشة 📷"),
         ("عجلة الفأرة", "مستوى الصوت بدقة"),
         ("C / Q", "الترجمة / الجودة"),
         ("E / S", "الحلقات / المصادر"),
@@ -2242,23 +2424,27 @@ fn keyboard(event: Event) {
         "l" | "mediafastforward" => seek(10.),
         "arrowleft" => seek(if event.shift_key() { -30. } else { -5. }),
         "arrowright" => seek(if event.shift_key() { 30. } else { 5. }),
-        "arrowup" => {
-            v.set_muted(false);
-            v.set_volume((v.volume() + 0.05).min(1.));
-            pill(&format!("الصوت {:.0}%", v.volume() * 100.));
+        "arrowup" => adjust_volume(0.05),
+        "arrowdown" => adjust_volume(-0.05),
+        "b" => {
+            let current = STATE.with(|c| c.borrow().boost_volume);
+            adjust_volume(if current > 1.0 { 1.0 - current } else { 1.0 });
         }
-        "arrowdown" => {
-            v.set_muted(false);
-            v.set_volume((v.volume() - 0.05).max(0.));
-            pill(&format!("الصوت {:.0}%", v.volume() * 100.));
-        }
+        "g" => adjust_sub_delay(if event.shift_key() { -1.0 } else { -0.25 }),
+        "h" => adjust_sub_delay(if event.shift_key() { 1.0 } else { 0.25 }),
         "m" => v.set_muted(!v.muted()),
         "f" => fullscreen(),
         "t" => toggle_theater(),
         "p" => pip(),
         "c" => toggle_subtitles(),
         "q" => open_quality(),
-        "s" => open_sources(),
+        "s" => {
+            if event.shift_key() {
+                take_snapshot();
+            } else {
+                open_sources();
+            }
+        }
         "e" => all_episodes(),
         "n" | "mediatracknext" => next_episode(),
         "a" => fit(),
@@ -2494,6 +2680,7 @@ pub fn init() {
     on("openQualitySheetBtn", "click", |_| open_quality());
     on("openEpisodesSheetBtn", "click", |_| all_episodes());
     on("toggleSubtitlesBtn", "click", |_| toggle_subtitles());
+    on("takeSnapshotBtn", "click", |_| take_snapshot());
     on("toggleTheaterBtn", "click", |_| toggle_theater());
     on("toggleFullscreenBtn", "click", |_| fullscreen());
     on("togglePipBtn", "click", |_| pip());
@@ -2594,12 +2781,10 @@ pub fn init() {
             event.prevent_default();
             let delta = event.delta_y();
             let step = if delta < 0. { 0.05 } else { -0.05 };
-            let new_vol = (v.volume() + step).clamp(0., 1.);
-            v.set_muted(false);
-            v.set_volume(new_vol);
-            pill(&format!("الصوت {:.0}%", new_vol * 100.));
+            adjust_volume(step);
         }
     });
+    init_sub_drag_and_drop();
     on("playerCanvas", "pointermove", |event| {
         if let Ok(event) = event.dyn_into::<PointerEvent>() {
             if event.pointer_type() == "mouse" {

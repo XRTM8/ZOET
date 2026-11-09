@@ -21,9 +21,13 @@ web-sys = { version = "0.3.107", features = [
   "Window", "Document", "Element", "HtmlElement", "Node", "NodeList", "DomTokenList", "DomRect", "CssStyleDeclaration",
   "Event", "EventTarget", "KeyboardEvent", "PointerEvent", "MouseEvent", "TouchEvent", "TouchList", "Touch", "WheelEvent",
   "HtmlVideoElement", "HtmlMediaElement", "HtmlIFrameElement", "HtmlTrackElement", "TextTrackList", "TextTrack", "TextTrackMode", "TimeRanges", "MediaError",
+  "AudioContext", "BaseAudioContext", "AudioDestinationNode", "AudioParam", "MediaElementAudioSourceNode", "GainNode",
+  "HtmlCanvasElement", "CanvasRenderingContext2d",
+  "DragEvent", "DataTransfer", "FileList", "File", "FileReader",
+  "TextTrackCueList", "TextTrackCue",
   "HtmlInputElement", "HtmlSelectElement", "HtmlButtonElement", "HtmlImageElement", "HtmlCollection",
-  "Request", "RequestInit", "RequestCache", "Response", "Headers", "AbortController", "AbortSignal", "UrlSearchParams", "Url",
-  "Storage", "Location", "Navigator", "ServiceWorkerContainer", "MediaQueryList", "Performance", "ScrollToOptions", "ScrollBehavior", "FocusOptions", "console"
+  "Request", "RequestInit", "RequestCache", "Response", "Headers", "AbortController", "AbortSignal", "UrlSearchParams", "Url", "Blob",
+  "Storage", "Location", "History", "Navigator", "ServiceWorkerContainer", "MediaQueryList", "Performance", "ScrollToOptions", "ScrollBehavior", "FocusOptions", "console"
 ] }
 
 [profile.release]

@@ -1585,6 +1585,49 @@ pub fn init() {
         on("deskBrandBtn", "click", |_| set_view("series"));
         on("deskControlsHelpBtn", "click", |_| open_controls_guide());
     }
+    if document().get_element_by_id("winMinimizeBtn").is_some() {
+        on("winMinimizeBtn", "click", |_| {
+            let win = window();
+            if let Ok(tauri) = js_sys::Reflect::get(&win, &wasm_bindgen::JsValue::from_str("__TAURI__")) {
+                if !tauri.is_undefined() {
+                    let _ = js_sys::eval("window.__TAURI__.window.getCurrentWindow().minimize()");
+                    return;
+                }
+            }
+            if player::is_open() {
+                player::close();
+            }
+        });
+        on("winMaximizeBtn", "click", |_| {
+            let win = window();
+            if let Ok(tauri) = js_sys::Reflect::get(&win, &wasm_bindgen::JsValue::from_str("__TAURI__")) {
+                if !tauri.is_undefined() {
+                    let _ = js_sys::eval("window.__TAURI__.window.getCurrentWindow().toggleMaximize()");
+                    return;
+                }
+            }
+            let doc = document();
+            if doc.fullscreen_element().is_some() {
+                let _ = doc.exit_fullscreen();
+            } else if let Some(el) = doc.document_element() {
+                let _ = el.request_fullscreen();
+            }
+        });
+        on("winCloseBtn", "click", |_| {
+            let win = window();
+            if let Ok(tauri) = js_sys::Reflect::get(&win, &wasm_bindgen::JsValue::from_str("__TAURI__")) {
+                if !tauri.is_undefined() {
+                    let _ = js_sys::eval("window.__TAURI__.window.getCurrentWindow().close()");
+                    return;
+                }
+            }
+            if player::is_open() {
+                player::close();
+            } else if let Ok(history) = win.history() {
+                let _ = history.back();
+            }
+        });
+    }
     if document().get_element_by_id("desktopSearchInput").is_some() {
         on("desktopSearchInput", "input", |_| {
             if let Some(desk_input) = document()

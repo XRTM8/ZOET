@@ -69,6 +69,11 @@
         <input type="search" id="desktopSearchInput" placeholder="ابحث عن فيلم أو مسلسل (Ctrl+K)..." autocomplete="off" spellcheck="false" aria-label="بحث فوري">
         <kbd class="desktop-search-shortcut">Ctrl+K</kbd>
       </div>
+      <div class="desktop-window-controls" id="desktopWindowControls" aria-label="التحكم بالنافذة">
+        <button class="win-btn" id="winMinimizeBtn" title="تصغير" aria-label="تصغير"><i class="fa-solid fa-minus"></i></button>
+        <button class="win-btn" id="winMaximizeBtn" title="تكبير / استعادة" aria-label="تكبير"><i class="fa-regular fa-square"></i></button>
+        <button class="win-btn win-close" id="winCloseBtn" title="إغلاق" aria-label="إغلاق"><i class="fa-solid fa-xmark"></i></button>
+      </div>
     </header>
     <section class="source-switcher" id="sourceSwitcher" aria-label="المصادر">
       <span class="source-label">المصادر</span><div class="source-options"><button class="source-option active" data-source="all" aria-pressed="true">الكل</button><button class="source-option" data-source="krmzi" aria-pressed="false">قرمزي</button><button class="source-option" data-source="cinemana" aria-pressed="false">سينمانا</button></div>
@@ -187,6 +192,7 @@
               <button class="action-capsule episodes-menu-button" id="openEpisodesSheetBtn" aria-label="قائمة الحلقات"><i class="fa-solid fa-list"></i><span>الحلقات</span></button>
               <div class="bar-circle-dock">
                 <button class="action-circle-icon hidden" id="toggleSubtitlesBtn" aria-label="الترجمة" title="الترجمة">CC</button>
+                <button class="action-circle-icon" id="takeSnapshotBtn" aria-label="التقاط لقطة شاشة" title="التقاط لقطة شاشة (Shift+S)"><i class="fa-solid fa-camera"></i></button>
                 <button class="action-circle-icon" id="toggleTheaterBtn" aria-label="وضع المسرح" title="وضع المسرح (T)"><i class="fa-solid fa-table-columns"></i></button>
                 <button class="action-circle-icon" id="toggleAspectRatioBtn" aria-label="أبعاد الفيديو" title="أبعاد الفيديو"><i class="fa-solid fa-expand"></i></button>
                 <button class="action-circle-icon" id="togglePipBtn" aria-label="صورة داخل صورة"><i class="fa-solid fa-clone"></i></button>

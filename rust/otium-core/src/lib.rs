@@ -1,5 +1,8 @@
 //! Shared provider engine used directly by Android through JNI and by the web server.
 //! The API is read-only. Signed media links are never served stale.
+pub mod models;
+pub use models::*;
+
 use base64::{
     engine::general_purpose::{STANDARD, STANDARD_NO_PAD, URL_SAFE, URL_SAFE_NO_PAD},
     Engine as _,
