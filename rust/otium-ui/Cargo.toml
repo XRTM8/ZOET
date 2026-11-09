@@ -27,7 +27,7 @@ web-sys = { version = "0.3.107", features = [
   "TextTrackCueList", "TextTrackCue",
   "HtmlInputElement", "HtmlSelectElement", "HtmlButtonElement", "HtmlImageElement", "HtmlCollection",
   "Request", "RequestInit", "RequestCache", "Response", "Headers", "AbortController", "AbortSignal", "UrlSearchParams", "Url", "Blob",
-  "Storage", "Location", "History", "Navigator", "ServiceWorkerContainer", "MediaQueryList", "Performance", "ScrollToOptions", "ScrollBehavior", "FocusOptions", "console"
+  "Storage", "Location", "History", "Navigator", "ServiceWorkerContainer", "MediaQueryList", "Performance", "ScrollToOptions", "ScrollBehavior", "FocusOptions", "console", "Gamepad", "GamepadButton"
 ] }
 
 [profile.release]

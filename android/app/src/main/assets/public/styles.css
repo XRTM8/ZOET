@@ -1073,7 +1073,7 @@ video::-webkit-media-controls-panel {
 .player-screen.player-error .player-bar-bottom, .player-screen.player-error .hud-center-title { visibility: hidden; pointer-events: none; }
 .player-screen.player-error .player-loader { padding: 48px 12px 12px; gap: 8px; }
 .player-screen.player-error .player-message { padding: 0; font-size: 12px; line-height: 1.6; }
-video::cue { font-family: 'Tajawal', sans-serif; font-size: 90%; background: #000a; color: #fff; }
+video::cue { font-family: 'Tajawal', sans-serif; font-size: 90%; background: var(--sub-cue-bg, rgba(0, 0, 0, 0.72)); color: var(--sub-cue-color, #ffd700); text-shadow: 0 2px 4px rgba(0, 0, 0, 0.85); }
 
 /* Sheets have one scrolling body, regardless of content length. */
 .sheet-scrim { position: absolute; inset: 0; z-index: 90; background: #000a; display: flex; align-items: flex-end; }

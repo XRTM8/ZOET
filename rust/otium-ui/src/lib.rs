@@ -2,6 +2,7 @@ mod api;
 mod app;
 mod catalogue;
 mod dom;
+mod gamepad;
 mod player;
 
 use wasm_bindgen::prelude::*;
@@ -19,4 +20,5 @@ pub fn start() {
     }));
     app::init();
     player::init();
+    gamepad::init();
 }

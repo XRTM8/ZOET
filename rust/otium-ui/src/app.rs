@@ -640,7 +640,7 @@ fn load_listing(search: bool, reset: bool) {
         });
     }
 }
-fn set_view(view: &str) {
+pub fn set_view(view: &str) {
     STATE.with(|state| state.borrow_mut().view = view.into());
     show("libraryView", view == "library");
     show("seriesSection", view != "library");
@@ -684,7 +684,21 @@ fn set_view(view: &str) {
     }
     el("contentCanvas").set_scroll_top(0);
 }
-fn open_controls_guide() {
+pub fn current_view() -> String {
+    STATE.with(|state| state.borrow().view.clone())
+}
+pub fn cycle_view(forward: bool) {
+    let views = ["series", "movies", "library"];
+    let curr = current_view();
+    let idx = views.iter().position(|v| *v == curr).unwrap_or(0);
+    let next_idx = if forward {
+        (idx + 1) % views.len()
+    } else {
+        (idx + views.len() - 1) % views.len()
+    };
+    set_view(views[next_idx]);
+}
+pub fn open_controls_guide() {
     open_sheet(
         "اختصارات التحكم",
         "<div class=\"controls-guide\">\
@@ -693,8 +707,10 @@ fn open_controls_guide() {
         <p>الأسهم — تقديم وتأخير / الصوت</p>\
         <p>F — ملء الشاشة · M — كتم الصوت</p>\
         <p>S — المصادر · Q — الجودة · E — الحلقات</p>\
+        <p>V — فلاتر الصورة · Shift+C — لون الترجمة</p>\
         <p>0–9 — الانتقال داخل الحلقة · [ / ] — سرعة التشغيل</p>\
         <p>Esc — رجوع · / أو Ctrl+K — بحث فوري</p>\
+        <p>🎮 Gamepad — تحكم كامل بيد إكس بوكس وبلايستيشن</p>\
         <p>عجلة الماوس للتحكم الدقيق بالصوت، ولمستان على الهاتف.</p>\
         </div>",
     );
@@ -720,7 +736,7 @@ fn render_library() {
         }
     }
 }
-fn search_open() {
+pub fn search_open() {
     show("searchOverlay", true);
     focus("overlaySearchInput");
     let query = el("overlaySearchInput")
@@ -740,7 +756,7 @@ fn search_open() {
         schedule_search(true);
     }
 }
-fn search_close() {
+pub fn search_close() {
     STATE.with(|state| {
         let mut state = state.borrow_mut();
         let cancelled = state.search_timer.take().is_some() || state.search.pending > 0;
@@ -753,6 +769,12 @@ fn search_close() {
     });
     show("searchOverlay", false);
     focus("openSearchBtn");
+}
+pub fn is_search_open() -> bool {
+    !el("searchOverlay").class_list().contains("hidden")
+}
+pub fn is_sheet_open() -> bool {
+    !el("sheetBackdrop").class_list().contains("hidden")
 }
 fn schedule_search(immediate: bool) {
     let query = el("overlaySearchInput")
@@ -1426,6 +1448,10 @@ fn remote_focus(event: &KeyboardEvent) {
     if player::is_open() && el("sheetBackdrop").class_list().contains("hidden") {
         return;
     }
+    event.prevent_default();
+    remote_focus_key(&event.key());
+}
+pub fn remote_focus_key(key: &str) {
     let is_tv = document()
         .document_element()
         .and_then(|e| e.get_attribute("data-display"))
@@ -1438,9 +1464,9 @@ fn remote_focus(event: &KeyboardEvent) {
     } else {
         el("appFrame")
     };
-    let nodes = root
-        .query_selector_all("button,input,select,textarea,a[href],[tabindex]:not([tabindex='-1'])")
-        .unwrap();
+    let Ok(nodes) = root.query_selector_all("button,input,select,textarea,a[href],[tabindex]:not([tabindex='-1'])") else {
+        return;
+    };
     let nodes = (0..nodes.length())
         .filter_map(|i| nodes.item(i)?.dyn_into::<HtmlElement>().ok())
         .filter(|n| {
@@ -1457,15 +1483,14 @@ fn remote_focus(event: &KeyboardEvent) {
     };
     let Some(current) = current else {
         if let Some(first) = nodes.first() {
-            event.prevent_default();
             let _ = first.focus();
-            first.scroll_into_view_with_bool(event.key() == "ArrowUp");
+            first.scroll_into_view_with_bool(key == "ArrowUp");
         }
         return;
     };
     let rect = current.get_bounding_client_rect();
-    let horizontal = event.key() == "ArrowLeft" || event.key() == "ArrowRight";
-    let sign = if event.key() == "ArrowLeft" || event.key() == "ArrowUp" {
+    let horizontal = key == "ArrowLeft" || key == "ArrowRight";
+    let sign = if key == "ArrowLeft" || key == "ArrowUp" {
         -1.
     } else {
         1.
@@ -1488,9 +1513,8 @@ fn remote_focus(event: &KeyboardEvent) {
         .collect::<Vec<_>>();
     ranked.sort_by(|a, b| a.0.total_cmp(&b.0));
     if let Some((_, next)) = ranked.first() {
-        event.prevent_default();
         let _ = next.focus();
-        next.scroll_into_view_with_bool(event.key() == "ArrowUp");
+        next.scroll_into_view_with_bool(key == "ArrowUp");
     }
 }
 fn parse_version(v: &str) -> Vec<u32> {

@@ -1589,15 +1589,19 @@ pub fn open_quality() {
             content.push_str(&format!("<button class=\"sheet-row\" data-player-action=\"audio-track\" data-index=\"{index}\"><span>{icon}{name}</span></button>"));
         }
     }
-    let tracks = rows(&episode, "subtitles");
-    if !tracks.is_empty() {
-        content.push_str("<div class=\"sheet-sub-title\" style=\"margin-top:14px;\">حجم خط الترجمة</div>");
-        let current_size = storage("zoet_sub_size").unwrap_or_else(|| "medium".into());
-        for (sz_key, sz_label) in [("small", "صغير"), ("medium", "متوسط (افتراضي)"), ("large", "كبير")] {
-            let is_active = current_size == sz_key;
-            let icon = if is_active { "<i class=\"fa-solid fa-check\"></i> " } else { "" };
-            content.push_str(&format!("<button class=\"sheet-row\" data-player-action=\"sub-size\" data-size=\"{sz_key}\"><span>{icon}{sz_label}</span></button>"));
-        }
+    content.push_str("<div class=\"sheet-sub-title\" style=\"margin-top:14px;\">حجم خط الترجمة</div>");
+    let current_size = storage("zoet_sub_size").unwrap_or_else(|| "medium".into());
+    for (sz_key, sz_label) in [("small", "صغير"), ("medium", "متوسط (افتراضي)"), ("large", "كبير")] {
+        let is_active = current_size == sz_key;
+        let icon = if is_active { "<i class=\"fa-solid fa-check\"></i> " } else { "" };
+        content.push_str(&format!("<button class=\"sheet-row\" data-player-action=\"sub-size\" data-size=\"{sz_key}\"><span>{icon}{sz_label}</span></button>"));
+    }
+    content.push_str("<div class=\"sheet-sub-title\" style=\"margin-top:14px;\">لون خط الترجمة</div>");
+    let current_color = storage("zoet_sub_color").unwrap_or_else(|| "yellow".into());
+    for (c_key, c_label, _) in SUB_COLORS {
+        let is_active = current_color == c_key;
+        let icon = if is_active { "<i class=\"fa-solid fa-check\"></i> " } else { "" };
+        content.push_str(&format!("<button class=\"sheet-row\" data-player-action=\"sub-color\" data-color=\"{c_key}\"><span>{icon}{c_label}</span></button>"));
     }
     app::open_sheet("خيارات المشغل والصوت", &content);
 }
@@ -1864,7 +1868,7 @@ fn ready(playing: bool) {
         pill("تم تغيير المصدر مع حفظ موضعك");
     }
 }
-fn pill(message: &str) {
+pub fn pill(message: &str) {
     text("swipeValue", message);
     show("swipeIndicator", true);
     let timer = Timeout::new(1800, || show("swipeIndicator", false));
@@ -2022,6 +2026,56 @@ pub fn take_snapshot() {
         }
     }
     pill("تعذر استخراج صورة المشهد لمصدر البث");
+}
+pub const FILTERS: [(&str, &str, &str); 4] = [
+    ("normal", "عادي", "none"),
+    ("anime", "أنمي مشرق", "contrast(1.12) saturate(1.28) brightness(1.04)"),
+    ("cinema", "سينما ليلي", "contrast(1.08) brightness(0.92) saturate(1.05)"),
+    ("shadow", "مُعادل المشاهد المظلمة", "contrast(1.02) brightness(1.15) saturate(1.02)"),
+];
+
+pub fn cycle_video_filter() {
+    let current = storage("zoet_video_filter").unwrap_or_else(|| "normal".into());
+    let idx = FILTERS.iter().position(|(id, _, _)| *id == current).unwrap_or(0);
+    let next_idx = (idx + 1) % FILTERS.len();
+    let (id, label, css) = FILTERS[next_idx];
+    store("zoet_video_filter", id);
+    apply_video_filter(css);
+    pill(&format!("فلتر الصورة: {label}"));
+}
+
+pub fn apply_video_filter(filter_css: &str) {
+    style("nativePlayer", "filter", filter_css);
+}
+
+pub const SUB_COLORS: [(&str, &str, &str); 5] = [
+    ("yellow", "أصفر كلاسيكي", "#ffd700"),
+    ("white", "أبيض ناصع", "#ffffff"),
+    ("cyan", "سماوي نيون", "#00f0ff"),
+    ("green", "أخضر فاتح", "#39ff14"),
+    ("amber", "كهرماني دافئ", "#ffbf00"),
+];
+
+pub fn cycle_sub_color() {
+    let current = storage("zoet_sub_color").unwrap_or_else(|| "yellow".into());
+    let idx = SUB_COLORS.iter().position(|(id, _, _)| *id == current).unwrap_or(0);
+    let next_idx = (idx + 1) % SUB_COLORS.len();
+    let (id, label, hex) = SUB_COLORS[next_idx];
+    store("zoet_sub_color", id);
+    apply_sub_color(hex);
+    pill(&format!("لون الترجمة: {label}"));
+}
+
+pub fn apply_sub_color(color_hex: &str) {
+    style("mobilePlayer", "--sub-cue-color", color_hex);
+    style("nativePlayer", "--sub-cue-color", color_hex);
+}
+
+pub fn toggle_mute() {
+    let v = video();
+    let muted = !v.muted();
+    v.set_muted(muted);
+    pill(if muted { "تم كتم الصوت 🔇" } else { "تم تشغيل الصوت 🔊" });
 }
 pub fn init_sub_drag_and_drop() {
     on("playerCanvas", "dragover", |event| {
@@ -2181,7 +2235,7 @@ fn tick() {
         failed();
     }
 }
-fn toggle_subtitles() {
+pub fn toggle_subtitles() {
     let Some(tracks) = video().text_tracks() else {
         return;
     };
@@ -2233,7 +2287,7 @@ fn pip() {
         }
     }
 }
-fn fit() {
+pub fn fit() {
     let previous = storage("otium_fit_mode").unwrap_or_else(|| "contain".into());
     let mode = match previous.as_str() {
         "contain" => "cover",
@@ -2260,9 +2314,12 @@ pub fn controls_help() {
         ("M", "كتم الصوت"),
         ("F / P", "ملء الشاشة / صورة مصغرة"),
         ("T", "وضع المسرح / شاشة عريضة"),
+        ("V", "فلاتر الصورة (أنمي / سينما / ليلي) 🎨"),
         ("B", "مضخم الصوت حتى 300% ⚡"),
         ("G / H", "مزامنة الترجمة (- / +)"),
+        ("Shift+C", "لون الترجمة (أصفر / أبيض / نيون)"),
         ("Shift+S", "التقاط لقطة شاشة 📷"),
+        ("🎮 Gamepad", "دعم كامل ليد تحكم إكس بوكس وبلايستيشن"),
         ("عجلة الفأرة", "مستوى الصوت بدقة"),
         ("C / Q", "الترجمة / الجودة"),
         ("E / S", "الحلقات / المصادر"),
@@ -2270,7 +2327,7 @@ pub fn controls_help() {
         ("N", "الحلقة التالية"),
         ("Esc", "إغلاق القائمة أو المشغل"),
     ];
-    app::open_sheet("اختصارات التحكم",&format!("<div class=\"controls-guide\"><p>انقر مرتين للتقديم أو الرجوع. اضغط مطوّلاً لسرعة 2×. اسحب عمودياً يمين الفيديو للصوت ويساره للإضاءة.</p><div class=\"shortcut-list\">{}</div></div>",rows.iter().map(|(key,label)|format!("<div><kbd dir=\"ltr\">{}</kbd><span>{}</span></div>",esc(key),esc(label))).collect::<String>()));
+    app::open_sheet("اختصارات التحكم",&format!("<div class=\"controls-guide\"><p>انقر مرتين للتقديم أو الرجوع. اضغط مطوّلاً لسرعة 2×. اسحب عمودياً يمين الفيديو للصوت ويساره للإضاءة. تدعم ZOET يد التحكم (Gamepad) لأجهزة Xbox و PlayStation بالكامل.</p><div class=\"shortcut-list\">{}</div></div>",rows.iter().map(|(key,label)|format!("<div><kbd dir=\"ltr\">{}</kbd><span>{}</span></div>",esc(key),esc(label))).collect::<String>()));
 }
 fn action(row: Element) {
     let kind = row.get_attribute("data-player-action").unwrap_or_default();
@@ -2361,6 +2418,16 @@ fn action(row: Element) {
                 pill("تم ضبط حجم الترجمة");
             }
         }
+        "sub-color" => {
+            if let Some(c) = row.get_attribute("data-color") {
+                store("zoet_sub_color", &c);
+                if let Some((_, label, hex)) = SUB_COLORS.iter().find(|(id, _, _)| id == &c) {
+                    apply_sub_color(hex);
+                    pill(&format!("لون الترجمة: {label}"));
+                }
+                app::close_sheet();
+            }
+        }
         _ => {}
     }
 }
@@ -2435,8 +2502,15 @@ fn keyboard(event: Event) {
         "m" => v.set_muted(!v.muted()),
         "f" => fullscreen(),
         "t" => toggle_theater(),
+        "v" => cycle_video_filter(),
         "p" => pip(),
-        "c" => toggle_subtitles(),
+        "c" => {
+            if event.shift_key() {
+                cycle_sub_color();
+            } else {
+                toggle_subtitles();
+            }
+        }
         "q" => open_quality(),
         "s" => {
             if event.shift_key() {
@@ -2681,6 +2755,7 @@ pub fn init() {
     on("openEpisodesSheetBtn", "click", |_| all_episodes());
     on("toggleSubtitlesBtn", "click", |_| toggle_subtitles());
     on("takeSnapshotBtn", "click", |_| take_snapshot());
+    on("toggleVideoFilterBtn", "click", |_| cycle_video_filter());
     on("toggleTheaterBtn", "click", |_| toggle_theater());
     on("toggleFullscreenBtn", "click", |_| fullscreen());
     on("togglePipBtn", "click", |_| pip());
@@ -2822,4 +2897,12 @@ pub fn init() {
         class("mobilePlayer", "wide-mode", true);
     }
     apply_sub_size();
+    let filter = storage("zoet_video_filter").unwrap_or_else(|| "normal".into());
+    if let Some((_, _, css)) = FILTERS.iter().find(|(id, _, _)| id == &filter) {
+        apply_video_filter(css);
+    }
+    let sub_color = storage("zoet_sub_color").unwrap_or_else(|| "yellow".into());
+    if let Some((_, _, hex)) = SUB_COLORS.iter().find(|(id, _, _)| id == &sub_color) {
+        apply_sub_color(hex);
+    }
 }
