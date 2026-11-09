@@ -1702,6 +1702,42 @@ pub fn init() {
     });
     on("loadMoreSeriesBtn", "click", |_| load_listing(false, false));
     on("loadMoreSearchBtn", "click", |_| load_listing(true, false));
+    on("contentCanvas", "scroll", |_| {
+        if let Ok(canvas) = el("contentCanvas").dyn_into::<web_sys::HtmlElement>() {
+            let scroll_top = canvas.scroll_top();
+            let scroll_height = canvas.scroll_height();
+            let client_height = canvas.client_height();
+            if scroll_height - scroll_top - client_height < 700 {
+                let should_load = STATE.with(|state| {
+                    let state = state.borrow();
+                    state.main.pending == 0
+                        && state.main.pages.values().any(|p| p.next.is_some() && !p.failed)
+                });
+                if should_load {
+                    load_listing(false, false);
+                }
+            }
+        }
+    });
+    if let Some(search_area) = document().get_element_by_id("searchScrollArea") {
+        listen(search_area.as_ref(), "scroll", |_| {
+            if let Ok(area) = el("searchScrollArea").dyn_into::<web_sys::HtmlElement>() {
+                let scroll_top = area.scroll_top();
+                let scroll_height = area.scroll_height();
+                let client_height = area.client_height();
+                if scroll_height - scroll_top - client_height < 700 {
+                    let should_load = STATE.with(|state| {
+                        let state = state.borrow();
+                        state.search.pending == 0
+                            && state.search.pages.values().any(|p| p.next.is_some() && !p.failed)
+                    });
+                    if should_load {
+                        load_listing(true, false);
+                    }
+                }
+            }
+        });
+    }
     on("retryBtn", "click", |_| load_listing(false, false));
     on("switchToSeriesBtn", "click", |_| set_view("series"));
     on("closeSheetBtn", "click", |_| close_sheet());

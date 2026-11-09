@@ -2111,7 +2111,8 @@ html[data-display='tv'] .series-edition-switch-btn { font-size:16px;padding:8px 
 .catalogue-pagination p { color:var(--text-sub);font-size:12px;text-align:center;line-height:1.8 }
 .load-more-btn { display:inline-flex;align-items:center;justify-content:center;min-height:46px;min-width:160px;padding:11px 26px;border:1px solid #ffffff26;background:#ffffff08;color:var(--text-main);border-radius:11px;font:inherit;font-size:13px;text-decoration:none;transition:transform .16s var(--ease-out-expo),background .16s,border-color .16s,box-shadow .16s; }
 .load-more-btn:active,.btn-retry:active,.check-update-btn:active { transform:scale(0.95); }
-.load-more-btn:disabled { opacity:.5;cursor:wait }
+.load-more-btn:disabled { opacity:.75;cursor:wait }
+.load-more-btn:disabled::before { content:"";display:inline-block;width:14px;height:14px;margin-inline-end:8px;border:2px solid #ffffff30;border-top-color:var(--accent,#E53935);border-radius:50%;animation:spin .7s linear infinite; }
 .sheet-panel { background:var(--bg-glass);border:1px solid #ffffff20;border-radius:22px 22px 0 0;box-shadow:0 20px 80px #0006 }
 .sheet-scrim { background:#0008;animation:none }
 .sheet-panel:has(.series-detail-hero) { max-height:94%;padding-top:9px }
