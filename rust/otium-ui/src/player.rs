@@ -10,7 +10,7 @@ use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use wasm_bindgen_futures::{spawn_local, JsFuture};
 use web_sys::{
     AbortController, Element, Event, HtmlElement, HtmlInputElement, HtmlVideoElement,
-    KeyboardEvent, PointerEvent, TextTrackMode,
+    KeyboardEvent, PointerEvent, TextTrackMode, WheelEvent,
 };
 
 #[derive(Clone, Debug)]
@@ -1873,10 +1873,14 @@ fn hide_hud() {
     class("playerHudTop", "hud-hidden", true);
     class("playerHudBottom", "hud-hidden", true);
     class("hudCenter", "hud-hidden", true);
+    if !video().paused() {
+        class("playerCanvas", "cursor-hidden", true);
+    }
 }
 fn show_hud(auto_hide: bool) {
     class("playerHudTop", "hud-hidden", false);
     class("playerHudBottom", "hud-hidden", false);
+    class("playerCanvas", "cursor-hidden", false);
     class(
         "hudCenter",
         "hud-hidden",
@@ -1892,6 +1896,16 @@ fn show_hud(auto_hide: bool) {
         None
     };
     STATE.with(|c| c.borrow_mut().hud = timer);
+}
+pub fn toggle_theater() {
+    let wide = !el("mobilePlayer").class_list().contains("wide-mode");
+    class("mobilePlayer", "wide-mode", wide);
+    store("zoet_player_wide", if wide { "1" } else { "0" });
+    pill(if wide {
+        "وضع العرض: شاشة عريضة"
+    } else {
+        "وضع المسرح: قائمة الحلقات الجانبية"
+    });
 }
 fn next_episode() {
     let next = STATE.with(|c| {
@@ -2066,6 +2080,8 @@ pub fn controls_help() {
         ("0–9", "الانتقال لنسبة من الفيديو"),
         ("M", "كتم الصوت"),
         ("F / P", "ملء الشاشة / صورة مصغرة"),
+        ("T", "وضع المسرح / شاشة عريضة"),
+        ("عجلة الفأرة", "مستوى الصوت بدقة"),
         ("C / Q", "الترجمة / الجودة"),
         ("E / S", "الحلقات / المصادر"),
         ("[ / ]", "سرعة العرض"),
@@ -2238,6 +2254,7 @@ fn keyboard(event: Event) {
         }
         "m" => v.set_muted(!v.muted()),
         "f" => fullscreen(),
+        "t" => toggle_theater(),
         "p" => pip(),
         "c" => toggle_subtitles(),
         "q" => open_quality(),
@@ -2477,6 +2494,7 @@ pub fn init() {
     on("openQualitySheetBtn", "click", |_| open_quality());
     on("openEpisodesSheetBtn", "click", |_| all_episodes());
     on("toggleSubtitlesBtn", "click", |_| toggle_subtitles());
+    on("toggleTheaterBtn", "click", |_| toggle_theater());
     on("toggleFullscreenBtn", "click", |_| fullscreen());
     on("togglePipBtn", "click", |_| pip());
     on("toggleAspectRatioBtn", "click", |_| fit());
@@ -2545,14 +2563,48 @@ pub fn init() {
     });
     on("timelineBar", "pointermove", |event| {
         if let Ok(event) = event.dyn_into::<PointerEvent>() {
+            let rect = el("timelineBar").get_bounding_client_rect();
+            let v = video();
+            if v.duration().is_finite() && rect.width() > 0. {
+                let ratio = ((event.client_x() as f64 - rect.left()) / rect.width()).clamp(0., 1.);
+                let hover_time = ratio * v.duration();
+                text("timelineHoverTime", &format_time(hover_time));
+                style("timelineHoverTime", "left", &format!("{:.1}%", ratio * 100.));
+                show("timelineHoverTime", true);
+            }
             if el("timelineBar").has_pointer_capture(event.pointer_id()) {
                 pointer_seek(&event);
             }
         }
     });
+    on("timelineBar", "pointerleave", |_| {
+        show("timelineHoverTime", false);
+    });
     on("timelineBar", "pointerup", |event| {
         if let Ok(event) = event.dyn_into::<PointerEvent>() {
             let _ = el("timelineBar").release_pointer_capture(event.pointer_id());
+        }
+    });
+    on("playerCanvas", "wheel", |event| {
+        if let Ok(event) = event.dyn_into::<WheelEvent>() {
+            let v = video();
+            if !v.duration().is_finite() {
+                return;
+            }
+            event.prevent_default();
+            let delta = event.delta_y();
+            let step = if delta < 0. { 0.05 } else { -0.05 };
+            let new_vol = (v.volume() + step).clamp(0., 1.);
+            v.set_muted(false);
+            v.set_volume(new_vol);
+            pill(&format!("الصوت {:.0}%", new_vol * 100.));
+        }
+    });
+    on("playerCanvas", "pointermove", |event| {
+        if let Ok(event) = event.dyn_into::<PointerEvent>() {
+            if event.pointer_type() == "mouse" {
+                show_hud(true);
+            }
         }
     });
     on("timelineBar", "keydown", |event| {
@@ -2581,5 +2633,8 @@ pub fn init() {
     STATE.with(|c| c.borrow_mut().watchdog = Some(timer));
     let fit_mode = storage("otium_fit_mode").unwrap_or_else(|| "contain".into());
     class("playerCanvas", &format!("fit-{fit_mode}"), true);
+    if storage("zoet_player_wide").as_deref() == Some("1") {
+        class("mobilePlayer", "wide-mode", true);
+    }
     apply_sub_size();
 }

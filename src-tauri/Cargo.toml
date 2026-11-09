@@ -1,0 +1,27 @@
+[package]
+name = "zoet-desktop"
+version = "2.7.2"
+description = "ZOET Desktop Native App"
+authors = ["Otium"]
+edition = "2021"
+
+[lib]
+name = "zoet_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+otium-core = { path = "../rust/otium-core" }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"

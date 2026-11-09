@@ -17,19 +17,66 @@
 </head>
 <body>
 <div class="app-frame" id="appFrame">
+  <aside class="desktop-sidebar" id="desktopSidebar" aria-label="القائمة الجانبية">
+    <div class="sidebar-brand-block">
+      <button class="sidebar-brand-btn" id="deskBrandBtn" aria-label="ZOET">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M4.5 5.5H19.5L4.5 18.5H19.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="19.5" cy="5.5" r="2" fill="#E53935"/></svg></span>
+        <span class="brand-text">ZOET</span>
+      </button>
+    </div>
+    <nav class="sidebar-nav">
+      <button class="sidebar-nav-item active" id="deskTabSeries" aria-label="المسلسلات">
+        <i class="fa-solid fa-tv"></i>
+        <span>المسلسلات</span>
+      </button>
+      <button class="sidebar-nav-item" id="deskTabMovies" aria-label="الأفلام">
+        <i class="fa-solid fa-film"></i>
+        <span>الأفلام</span>
+      </button>
+      <button class="sidebar-nav-item" id="deskTabLibrary" aria-label="مكتبتي">
+        <i class="fa-regular fa-bookmark"></i>
+        <span>مكتبتي</span>
+      </button>
+    </nav>
+    <div class="sidebar-source-box">
+      <span class="sidebar-section-title">المصادر</span>
+      <div class="sidebar-source-list">
+        <button class="sidebar-source-pill active" data-desk-source="all">الكل</button>
+        <button class="sidebar-source-pill" data-desk-source="krmzi">قرمزي</button>
+        <button class="sidebar-source-pill" data-desk-source="cinemana">سينمانا</button>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <button class="sidebar-action-btn" id="deskControlsHelpBtn" title="اختصارات لوحة المفاتيح">
+        <i class="fa-regular fa-keyboard"></i>
+        <span>الاختصارات</span>
+        <kbd>?</kbd>
+      </button>
+      <div class="sidebar-version-badge">
+        <span>v2.7.2</span>
+      </div>
+    </div>
+  </aside>
   <header class="top-nav">
     <button class="nav-brand" id="brandBtn" aria-label="ZOET"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M4.5 5.5H19.5L4.5 18.5H19.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="19.5" cy="5.5" r="2" fill="#E53935"/></svg></span><span class="brand-text">ZOET</span></button>
     <div class="nav-tools"><button class="nav-icon-btn" id="openSearchBtn" aria-label="بحث"><i class="fa-solid fa-magnifying-glass"></i></button><button class="nav-icon-btn" id="openLibraryBtn" aria-label="مكتبتي"><i class="fa-regular fa-bookmark"></i></button></div>
   </header>
   <nav class="catalogue-tabs" aria-label="المكتبة"><button id="tabSeries" class="active" aria-selected="true">المسلسلات</button><button id="tabMovies" aria-selected="false">الأفلام</button></nav>
   <main class="content-canvas" id="contentCanvas">
+    <header class="desktop-topbar" id="desktopTopbar">
+      <div class="desktop-search-container">
+        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+        <input type="search" id="desktopSearchInput" placeholder="ابحث عن فيلم أو مسلسل (Ctrl+K)..." autocomplete="off" spellcheck="false" aria-label="بحث فوري">
+        <kbd class="desktop-search-shortcut">Ctrl+K</kbd>
+      </div>
+    </header>
     <section class="source-switcher" id="sourceSwitcher" aria-label="المصادر">
       <span class="source-label">المصادر</span><div class="source-options"><button class="source-option active" data-source="all" aria-pressed="true">الكل</button><button class="source-option" data-source="krmzi" aria-pressed="false">قرمزي</button><button class="source-option" data-source="cinemana" aria-pressed="false">سينمانا</button></div>
     </section>
     <p id="bootStatus" class="boot-status" role="status">جاري تشغيل ZOET…</p>
     <section class="feed-section" id="seriesSection"><div class="section-headline"><h1 id="catalogueTitle">المسلسلات</h1><span id="seriesCountSub" class="headline-muted"></span></div><div class="media-grid" id="seriesGrid"></div><div class="catalogue-pagination"><p id="cataloguePageStatus" role="status"></p><button class="load-more-btn hidden" id="loadMoreSeriesBtn">عرض المزيد</button></div></section>
     <section class="offline-card hidden" id="offlineState"><h3 id="offlineTitle">تعذّر الوصول إلى المصادر</h3><p id="offlineDesc">تحقّق من الاتصال وأعد المحاولة. توفّر سينمانا يعتمد على مزوّد الإنترنت.</p><div class="offline-actions"><button class="btn-retry" id="retryBtn">إعادة المحاولة</button><button class="btn-retry secondary hidden" id="switchToSeriesBtn">عرض مسلسلات قرمزي</button></div></section>
-    <section class="feed-section library-wrap hidden" id="libraryView"><div class="library-header-row"><h2>مكتبتي</h2><div class="library-header-actions"><button class="headline-link" id="backupDataBtn"><i class="fa-solid fa-arrow-right-arrow-left"></i> تصدير واستيراد</button><button class="headline-link" id="clearHistoryBtn">مسح السجل</button></div></div><div class="segmented-control"><button class="segment-btn" data-library="hist">سجل المشاهدة</button><button class="segment-btn" data-library="favs">المفضلة</button></div><div class="media-grid" id="libraryGrid"></div><div class="display-preference"><div><h3>طريقة العرض</h3><p>للهاتف والكمبيوتر. اختر التلفزيون عند استخدام الريموت.</p></div><select id="displayModeSelect" aria-label="طريقة العرض"><option value="auto">تلقائي</option><option value="tv">تلفزيون</option></select></div><button class="controls-help-link" id="controlsHelpBtn"><i class="fa-regular fa-keyboard"></i><span>اختصارات التحكم</span><kbd>?</kbd></button><div class="app-version-card"><div class="version-text"><span class="v-label">ZOET</span><span class="v-val" id="installedVersionText">v2.7.2</span></div><button class="check-update-btn" id="manualCheckUpdateBtn"><i class="fa-solid fa-arrows-rotate"></i><span id="checkUpdateBtnText">بحث عن تحديث</span></button></div></section>
+    <section class="feed-section library-wrap hidden" id="libraryView"><div class="library-header-row"><h2>مكتبتي</h2><div class="library-header-actions"><button class="headline-link" id="backupDataBtn"><i class="fa-solid fa-arrow-right-arrow-left"></i> تصدير واستيراد</button><button class="headline-link" id="clearHistoryBtn">مسح السجل</button></div></div><div class="segmented-control"><button class="segment-btn" data-library="hist">سجل المشاهدة</button><button class="segment-btn" data-library="favs">المفضلة</button></div><div class="media-grid" id="libraryGrid"></div><div class="display-preference"><div><h3>طريقة العرض</h3><p>للهاتف والكمبيوتر. اختر التلفزيون عند استخدام الريموت.</p></div><select id="displayModeSelect" aria-label="طريقة العرض"><option value="auto">تلقائي</option><option value="desktop">كمبيوتر</option><option value="tv">تلفزيون</option></select></div><button class="controls-help-link" id="controlsHelpBtn"><i class="fa-regular fa-keyboard"></i><span>اختصارات التحكم</span><kbd>?</kbd></button><div class="app-version-card"><div class="version-text"><span class="v-label">ZOET</span><span class="v-val" id="installedVersionText">v2.7.2</span></div><button class="check-update-btn" id="manualCheckUpdateBtn"><i class="fa-solid fa-arrows-rotate"></i><span id="checkUpdateBtnText">بحث عن تحديث</span></button></div></section>
   </main>
   <section class="search-modal hidden" id="searchOverlay" aria-label="البحث"><div class="search-topbar"><button class="btn-back" id="closeSearchOverlay" aria-label="رجوع"><i class="fa-solid fa-chevron-right"></i></button><div class="search-bar-wrap"><i class="fa-solid fa-magnifying-glass"></i><input type="search" id="overlaySearchInput" placeholder="اسم فيلم أو مسلسل" autocomplete="off" spellcheck="false" enterkeyhint="search" aria-label="ابحث في المصادر"></div></div><div class="search-scroll-area"><div class="search-zero-state" id="searchInitialState"><h3>ابحث عن عمل</h3><p>النتائج تجمع المصادر المتاحة.</p></div><p class="search-source-status" id="searchSourceStatus" role="status"></p><div class="media-grid hidden" id="searchGrid"></div><div class="catalogue-pagination"><button class="load-more-btn hidden" id="loadMoreSearchBtn">المزيد من النتائج</button></div></div></section>
     <!-- Minimal Video Player Interface -->
@@ -120,6 +167,7 @@
         <div class="player-bar-bottom" id="playerHudBottom">
           <!-- Timeline Scrubber -->
           <div class="scrub-line" id="timelineBar" role="slider" tabindex="0" aria-label="موضع المشاهدة" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="timeline-hover-time hidden" id="timelineHoverTime">00:00</div>
             <div class="scrub-loaded" id="timelineLoaded"></div>
             <div class="scrub-current" id="timelineProgress"></div>
             <div class="scrub-pin" id="timelineThumb"></div>
@@ -139,6 +187,7 @@
               <button class="action-capsule episodes-menu-button" id="openEpisodesSheetBtn" aria-label="قائمة الحلقات"><i class="fa-solid fa-list"></i><span>الحلقات</span></button>
               <div class="bar-circle-dock">
                 <button class="action-circle-icon hidden" id="toggleSubtitlesBtn" aria-label="الترجمة" title="الترجمة">CC</button>
+                <button class="action-circle-icon" id="toggleTheaterBtn" aria-label="وضع المسرح" title="وضع المسرح (T)"><i class="fa-solid fa-table-columns"></i></button>
                 <button class="action-circle-icon" id="toggleAspectRatioBtn" aria-label="أبعاد الفيديو" title="أبعاد الفيديو"><i class="fa-solid fa-expand"></i></button>
                 <button class="action-circle-icon" id="togglePipBtn" aria-label="صورة داخل صورة"><i class="fa-solid fa-clone"></i></button>
                 <button class="action-circle-icon" id="toggleFullscreenBtn" aria-label="ملء الشاشة"><i class="fa-solid fa-expand"></i></button>

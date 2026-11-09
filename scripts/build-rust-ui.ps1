@@ -1,6 +1,13 @@
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $manifestPath = Join-Path $projectRoot 'rust/otium-ui/Cargo.toml'
+
+$localToolRoot = "E:\PROJECTS\ARGON\release\update-tools"
+if (Test-Path "$localToolRoot\cargo\bin\cargo.exe") {
+    $env:RUSTUP_HOME = "$localToolRoot\rustup"
+    $env:CARGO_HOME = "$localToolRoot\cargo"
+    $env:PATH = "$localToolRoot\mingw64\bin;$localToolRoot\cargo\bin;$env:PATH"
+}
 Push-Location $projectRoot
 try {
     cargo build --manifest-path $manifestPath --target wasm32-unknown-unknown --release --locked

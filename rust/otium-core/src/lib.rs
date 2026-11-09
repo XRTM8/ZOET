@@ -355,7 +355,7 @@ impl Engine {
         Ok(parse_series_detail(&html, url))
     }
     async fn ok_streams(&self, id: &str) -> Result<Vec<Value>> {
-        if !Regex::new(r"^[0-9]+$").unwrap().is_match(id) {
+        if !compiled(r"^[0-9]+$").is_match(id) {
             return Err("Invalid mirror ID".into());
         }
         let html = self
@@ -615,12 +615,8 @@ fn media_host(url: &Url) -> bool {
 }
 fn subtitle_host(url: &Url) -> bool {
     allowed_authority(url)
-        && Regex::new(r"^cnth[0-9]*\.shabakaty\.com$")
-            .unwrap()
-            .is_match(url.host_str().unwrap_or(""))
-        && Regex::new(r"^/vascin-translation-files/[A-Za-z0-9_-]+\.vtt$")
-            .unwrap()
-            .is_match(url.path())
+        && compiled(r"^cnth[0-9]*\.shabakaty\.com$").is_match(url.host_str().unwrap_or(""))
+        && compiled(r"^/vascin-translation-files/[A-Za-z0-9_-]+\.vtt$").is_match(url.path())
 }
 pub fn safe_krmzi(raw: &str) -> Option<Url> {
     let mut u = Url::parse(raw.trim()).ok()?;
@@ -640,9 +636,9 @@ pub fn safe_subtitle(raw: &str) -> Option<Url> {
     Url::parse(raw).ok().filter(subtitle_host)
 }
 pub fn valid_cinemana_path(path: &str) -> bool {
-    let allowed=Regex::new(r"^(latestSeries|latestMovies)/level/0/itemsPerPage/24/page/[0-9]{1,4}/$").unwrap().is_match(path)||
-    Regex::new(r"^(allVideoInfo|videoSeason|transcoddedFiles)/id/[0-9]+$").unwrap().is_match(path)||
-    Regex::new(r"^video/V/2/itemsPerPage/20/video_title_search/[^/?#]+/itemsPerPage/12/pageNumber/[0-9]{1,4}/level/0$").unwrap().is_match(path);
+    let allowed = compiled(r"^(latestSeries|latestMovies)/level/0/itemsPerPage/24/page/[0-9]{1,4}/$").is_match(path)
+        || compiled(r"^(allVideoInfo|videoSeason|transcoddedFiles)/id/[0-9]+$").is_match(path)
+        || compiled(r"^video/V/2/itemsPerPage/20/video_title_search/[^/?#]+/itemsPerPage/12/pageNumber/[0-9]{1,4}/level/0$").is_match(path);
     allowed
         && Url::parse(&format!("{CINEMANA}{path}"))
             .map(|u| u.path() == format!("/api/android/{path}"))
@@ -675,7 +671,7 @@ pub fn rewrite_playlist(text: &str, base: &Url) -> Result<String> {
         }
         Ok(format!("/api/media?url={}", encode_uri(target.as_str())))
     };
-    let regex = Regex::new(r#"URI="([^"]+)""#).unwrap();
+    let regex = compiled(r#"URI="([^"]+)""#);
     text.lines()
         .map(|line| {
             if line.trim().is_empty() {
@@ -826,12 +822,9 @@ fn poster(html: &str) -> String {
     }
 }
 pub fn parse_cards(html: &str, kind: &str) -> Vec<Value> {
-    let blocks = Regex::new(r#"(?s)<div\s+class=["']block-post["']>(.*?)</div>\s*</div>"#).unwrap();
-    let links =
-        Regex::new(r#"(?s)<a\s+[^>]*href=["']([^"']+)["'][^>]*title=["']([^"']+)["']"#).unwrap();
-    let thumbs =
-        Regex::new(r#"url\(['"]?(https://krmzi\.org/wp-content/uploads/[^)'"\s]+)['"]?\)"#)
-            .unwrap();
+    let blocks = compiled(r#"(?s)<div\s+class=["']block-post["']>(.*?)</div>\s*</div>"#);
+    let links = compiled(r#"(?s)<a\s+[^>]*href=["']([^"']+)["'][^>]*title=["']([^"']+)["']"#);
+    let thumbs = compiled(r#"url\(['"]?(https://krmzi\.org/wp-content/uploads/[^)'"\s]+)['"]?\)"#);
     let mut result = Vec::new();
     let mut seen = HashSet::new();
     let episode_tail = compiled(r"الحلقة\s*\d+.*");
@@ -879,9 +872,7 @@ pub fn has_next_page(html: &str, page: u32, series: bool) -> bool {
         || Regex::new(&format!(r#"[?&](?:amp;)?paged={}([&#"']|$)"#, page + 1))
             .unwrap()
             .is_match(html)
-        || Regex::new(r#"class=["'][^"']*\bnext\b[^"']*["']"#)
-            .unwrap()
-            .is_match(html)
+        || compiled(r#"class=["'][^"']*\bnext\b[^"']*["']"#).is_match(html)
 }
 pub fn parse_series_detail(html: &str, url: &str) -> Value {
     let raw_h1 = capture(r"(?s)<h1[^>]*>(.*?)</h1>", html);
@@ -892,7 +883,7 @@ pub fn parse_series_detail(html: &str, url: &str) -> Value {
     ));
     let is_dubbed = html.contains("مدبلج") || url.contains("dubbed") || raw_h1.contains("مدبلج");
     let edition = if is_dubbed { "dubbed" } else { "original" };
-    let anchors = Regex::new(r#"(?s)<a\s+[^>]*href=["']([^"']+)["'][^>]*>(.*?)</a>"#).unwrap();
+    let anchors = compiled(r#"(?s)<a\s+[^>]*href=["']([^"']+)["'][^>]*>(.*?)</a>"#);
     let mut seen = HashSet::new();
     let mut episodes = Vec::new();
     for c in anchors.captures_iter(html) {
@@ -1019,7 +1010,7 @@ pub fn parse_episode_detail(html: &str, url: &str) -> Value {
     let is_dubbed = html.contains("مدبلج") || url.contains("dubbed") || raw_h1.contains("مدبلج");
     let edition = if is_dubbed { "dubbed" } else { "original" };
     let series_title = {
-        let re = Regex::new(r"الحلقة[-\s]*\d+.*").unwrap();
+        let re = compiled(r"الحلقة[-\s]*\d+.*");
         let s = re.replace(&title, "");
         let trimmed = s.trim();
         if trimmed.is_empty() {
@@ -1037,11 +1028,7 @@ pub fn parse_episode_detail(html: &str, url: &str) -> Value {
         .and_then(|v| v["servers"].as_array().cloned())
         .unwrap_or_default();
     if raw.is_empty() {
-        for c in
-            Regex::new(r#"<li[^>]*data-name=["']([^"']*)["'][^>]*data-server=["']([^"']*)["']"#)
-                .unwrap()
-                .captures_iter(html)
-        {
+        for c in compiled(r#"<li[^>]*data-name=["']([^"']*)["'][^>]*data-server=["']([^"']*)["']"#).captures_iter(html) {
             raw.push(json!({"name":decode_html(&c[1]),"id":decode_html(&c[2])}));
         }
     }

@@ -670,12 +670,34 @@ fn set_view(view: &str) {
         let _ = el(id).set_attribute("aria-selected", &active.to_string());
         let _ = el(id).class_list().toggle_with_force("active", active);
     }
+    for (id, v) in [("deskTabSeries", "series"), ("deskTabMovies", "movies"), ("deskTabLibrary", "library")] {
+        if let Some(tab) = document().get_element_by_id(id) {
+            let active = view == v;
+            let _ = tab.set_attribute("aria-selected", &active.to_string());
+            let _ = tab.class_list().toggle_with_force("active", active);
+        }
+    }
     if view == "library" {
         render_library();
     } else {
         load_listing(false, true);
     }
     el("contentCanvas").set_scroll_top(0);
+}
+fn open_controls_guide() {
+    open_sheet(
+        "اختصارات التحكم",
+        "<div class=\"controls-guide\">\
+        <p>Space / K — تشغيل وإيقاف</p>\
+        <p>J / L — تقديم وتأخير 10 ثوانٍ</p>\
+        <p>الأسهم — تقديم وتأخير / الصوت</p>\
+        <p>F — ملء الشاشة · M — كتم الصوت</p>\
+        <p>S — المصادر · Q — الجودة · E — الحلقات</p>\
+        <p>0–9 — الانتقال داخل الحلقة · [ / ] — سرعة التشغيل</p>\
+        <p>Esc — رجوع · / أو Ctrl+K — بحث فوري</p>\
+        <p>عجلة الماوس للتحكم الدقيق بالصوت، ولمستان على الهاتف.</p>\
+        </div>",
+    );
 }
 fn render_library() {
     let records = STATE.with(|state| {
@@ -1087,13 +1109,13 @@ fn click(event: Event) {
         return;
     }
     let Some(button) = target
-        .closest("[data-action],[data-source],[data-library]")
+        .closest("[data-action],[data-source],[data-desk-source],[data-library]")
         .ok()
         .flatten()
     else {
         return;
     };
-    if let Some(source) = button.get_attribute("data-source") {
+    if let Some(source) = button.get_attribute("data-source").or_else(|| button.get_attribute("data-desk-source")) {
         STATE.with(|state| {
             let mut state = state.borrow_mut();
             state.source = source.clone();
@@ -1236,10 +1258,13 @@ fn search_close_if_open() {
 }
 fn update_source() {
     let source = STATE.with(|state| state.borrow().source.clone());
-    if let Ok(buttons) = document().query_selector_all("[data-source]") {
+    if let Ok(buttons) = document().query_selector_all("[data-source],[data-desk-source]") {
         for i in 0..buttons.length() {
             if let Some(button) = buttons.item(i).and_then(|n| n.dyn_into::<Element>().ok()) {
-                let active = button.get_attribute("data-source").as_deref() == Some(&source);
+                let attr = button
+                    .get_attribute("data-source")
+                    .or_else(|| button.get_attribute("data-desk-source"));
+                let active = attr.as_deref() == Some(&source);
                 let _ = button.class_list().toggle_with_force("active", active);
                 let _ = button.set_attribute("aria-pressed", &active.to_string());
             }
@@ -1276,11 +1301,12 @@ fn apply_display() {
         .ok()
         .and_then(|v| v.as_f64())
         .unwrap_or(390.);
+    let desktop = saved_display.as_deref() == Some("desktop");
     let _ = document().document_element().unwrap().set_attribute(
         "data-display",
         if tv {
             "tv"
-        } else if width >= 1024. {
+        } else if desktop || width >= 1024. {
             "desktop"
         } else {
             "mobile"
@@ -1367,8 +1393,21 @@ fn keyboard(event: KeyboardEvent) {
             }
         }
     }
-    if !editable && !player::is_open() && event.key() == "/" {
+    if !player::is_open()
+        && ((!editable && event.key() == "/")
+            || (event.ctrl_key() && event.key().to_ascii_lowercase() == "k"))
+    {
         event.prevent_default();
+        if let Some(desk_input) = document().get_element_by_id("desktopSearchInput") {
+            if desk_input
+                .dyn_into::<HtmlElement>()
+                .map(|e| e.offset_height() > 0)
+                .unwrap_or(false)
+            {
+                focus("desktopSearchInput");
+                return;
+            }
+        }
         search_open();
     }
     if document()
@@ -1539,6 +1578,51 @@ pub fn init() {
     on("tabMovies", "click", |_| set_view("movies"));
     on("openLibraryBtn", "click", |_| set_view("library"));
     on("brandBtn", "click", |_| set_view("series"));
+    if document().get_element_by_id("deskTabSeries").is_some() {
+        on("deskTabSeries", "click", |_| set_view("series"));
+        on("deskTabMovies", "click", |_| set_view("movies"));
+        on("deskTabLibrary", "click", |_| set_view("library"));
+        on("deskBrandBtn", "click", |_| set_view("series"));
+        on("deskControlsHelpBtn", "click", |_| open_controls_guide());
+    }
+    if document().get_element_by_id("desktopSearchInput").is_some() {
+        on("desktopSearchInput", "input", |_| {
+            if let Some(desk_input) = document()
+                .get_element_by_id("desktopSearchInput")
+                .and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
+            {
+                let val = desk_input.value();
+                if let Some(overlay_input) = document()
+                    .get_element_by_id("overlaySearchInput")
+                    .and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
+                {
+                    overlay_input.set_value(&val);
+                }
+                search_open();
+                schedule_search(false);
+            }
+        });
+        on("desktopSearchInput", "keydown", |event| {
+            let event: KeyboardEvent = event.unchecked_into();
+            if event.key() == "Enter" {
+                event.prevent_default();
+                if let Some(desk_input) = document()
+                    .get_element_by_id("desktopSearchInput")
+                    .and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
+                {
+                    let val = desk_input.value();
+                    if let Some(overlay_input) = document()
+                        .get_element_by_id("overlaySearchInput")
+                        .and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
+                    {
+                        overlay_input.set_value(&val);
+                    }
+                    search_open();
+                    schedule_search(true);
+                }
+            }
+        });
+    }
     on("openSearchBtn", "click", |_| search_open());
     on("closeSearchOverlay", "click", |_| search_close());
     on("overlaySearchInput", "input", |_| schedule_search(false));
@@ -1581,9 +1665,7 @@ pub fn init() {
         store("otium_display", &select.value());
         apply_display();
     });
-    on("controlsHelpBtn", "click", |_| {
-        open_sheet("اختصارات التحكم","<div class=\"controls-guide\"><p>Space / K — تشغيل وإيقاف</p><p>J / L — تقديم وتأخير 10 ثوانٍ</p><p>الأسهم — تقديم وتأخير / الصوت</p><p>F — ملء الشاشة · M — كتم الصوت</p><p>S — المصادر · Q — الجودة · E — الحلقات</p><p>0–9 — الانتقال داخل الحلقة · [ / ] — سرعة التشغيل</p><p>Esc — رجوع · / — بحث</p><p>لمستان على جانبي الفيديو للتقديم أو التأخير.</p></div>")
-    });
+    on("controlsHelpBtn", "click", |_| open_controls_guide());
     listen(document().as_ref(), "click", click);
     listen(document().as_ref(), "input", |event| {
         if event

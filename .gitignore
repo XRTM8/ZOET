@@ -13,3 +13,4 @@ artifacts/
 release-output/
 rust/*/target/
 android/app/src/main/jniLibs/
+dist/
