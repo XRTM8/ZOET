@@ -474,7 +474,7 @@ fn render_listing(search: bool) {
         &status,
     );
     if !search {
-        text("seriesCountSub", &items.len().to_string());
+        text("seriesCountSub", "");
         let is_offline = items.is_empty() && pending == 0 && !failed.is_empty();
         show("offlineState", is_offline);
         if is_offline && view == "movies" {
@@ -622,9 +622,9 @@ fn load_listing(search: bool, reset: bool) {
                                 None
                             };
                         provider.items.extend(added);
-                        // cap stored items per-provider to 480 to prevent unbounded memory growth
-                        if provider.items.len() > 480 {
-                            provider.items.drain(..provider.items.len() - 480);
+                        // Allow continuous infinite scrolling without dropping top items
+                        if provider.items.len() > 100_000 {
+                            provider.items.drain(..provider.items.len() - 100_000);
                         }
                         provider.failed = false;
                     }

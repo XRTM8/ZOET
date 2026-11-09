@@ -246,33 +246,84 @@
   // Automatic Infinite Scroll Handler
   (function() {
     function initInfiniteScroll() {
-      if (!('IntersectionObserver' in window)) return;
-      
       const checkAndTrigger = (btn) => {
-        if (btn && !btn.disabled && !btn.classList.contains('hidden')) {
-          const txt = (btn.textContent || '').trim();
-          if (txt && !txt.includes('إعادة') && !txt.includes('المحاولة')) {
-            btn.click();
-          }
-        }
+        if (!btn || btn.disabled || btn.classList.contains('hidden')) return;
+        const txt = (btn.textContent || '').trim();
+        if (!txt || txt.includes('إعادة') || txt.includes('المحاولة') || txt.includes('جاري')) return;
+        btn.click();
       };
 
       const canvas = document.getElementById('contentCanvas');
       const seriesBtn = document.getElementById('loadMoreSeriesBtn');
-      if (canvas && seriesBtn) {
-        const obs = new IntersectionObserver((entries) => {
-          entries.forEach(e => { if (e.isIntersecting) checkAndTrigger(seriesBtn); });
-        }, { root: canvas, rootMargin: '600px 0px', threshold: 0.01 });
-        obs.observe(seriesBtn);
-      }
+      const seriesGrid = document.getElementById('seriesGrid');
 
       const searchArea = document.getElementById('searchScrollArea');
       const searchBtn = document.getElementById('loadMoreSearchBtn');
+      const searchGrid = document.getElementById('searchGrid');
+
+      // 1. Intersection Observer
+      if ('IntersectionObserver' in window) {
+        if (canvas && seriesBtn) {
+          const obs = new IntersectionObserver((entries) => {
+            entries.forEach(e => { if (e.isIntersecting) checkAndTrigger(seriesBtn); });
+          }, { root: canvas, rootMargin: '800px 0px', threshold: 0.01 });
+          obs.observe(seriesBtn);
+        }
+
+        if (searchArea && searchBtn) {
+          const obsSearch = new IntersectionObserver((entries) => {
+            entries.forEach(e => { if (e.isIntersecting) checkAndTrigger(searchBtn); });
+          }, { root: searchArea, rootMargin: '800px 0px', threshold: 0.01 });
+          obsSearch.observe(searchBtn);
+        }
+      }
+
+      // 2. Continuous Scroll Listener (fires on wheel, touch, and scrollbar movement)
+      if (canvas && seriesBtn) {
+        let scrollPending = false;
+        canvas.addEventListener('scroll', () => {
+          if (scrollPending) return;
+          scrollPending = true;
+          requestAnimationFrame(() => {
+            scrollPending = false;
+            if (canvas.scrollHeight - canvas.scrollTop - canvas.clientHeight < 1000) {
+              checkAndTrigger(seriesBtn);
+            }
+          });
+        }, { passive: true });
+      }
+
       if (searchArea && searchBtn) {
-        const obsSearch = new IntersectionObserver((entries) => {
-          entries.forEach(e => { if (e.isIntersecting) checkAndTrigger(searchBtn); });
-        }, { root: searchArea, rootMargin: '600px 0px', threshold: 0.01 });
-        obsSearch.observe(searchBtn);
+        let searchScrollPending = false;
+        searchArea.addEventListener('scroll', () => {
+          if (searchScrollPending) return;
+          searchScrollPending = true;
+          requestAnimationFrame(() => {
+            searchScrollPending = false;
+            if (searchArea.scrollHeight - searchArea.scrollTop - searchArea.clientHeight < 1000) {
+              checkAndTrigger(searchBtn);
+            }
+          });
+        }, { passive: true });
+      }
+
+      // 3. Grid Mutation Observer: when new batch renders, chain-load if still near bottom
+      if (seriesGrid && canvas && seriesBtn && 'MutationObserver' in window) {
+        const gridObs = new MutationObserver(() => {
+          if (canvas.scrollHeight - canvas.scrollTop - canvas.clientHeight < 1000) {
+            checkAndTrigger(seriesBtn);
+          }
+        });
+        gridObs.observe(seriesGrid, { childList: true });
+      }
+
+      if (searchGrid && searchArea && searchBtn && 'MutationObserver' in window) {
+        const searchGridObs = new MutationObserver(() => {
+          if (searchArea.scrollHeight - searchArea.scrollTop - searchArea.clientHeight < 1000) {
+            checkAndTrigger(searchBtn);
+          }
+        });
+        searchGridObs.observe(searchGrid, { childList: true });
       }
     }
 
