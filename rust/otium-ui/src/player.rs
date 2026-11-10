@@ -1,7 +1,7 @@
 //! The playback session is independent from catalogue requests and sheets.
 //! A replacement source is resolved before media is touched; failed replacement
 //! attempts restore the last working episode and playback settings.
-use crate::{api, app, catalogue, dom::*};
+use crate::{api, app, catalogue, dom::*, icons};
 use gloo_timers::callback::{Interval, Timeout};
 use js_sys::{Array, Function, Object, Promise, Reflect};
 use serde_json::{json, Value};
@@ -379,9 +379,9 @@ fn title_ui(episode: &Value) {
     html(
         "playerFavBtn",
         if app::is_favorite(episode) {
-            "<i class=\"fa-solid fa-heart\"></i>"
+            icons::HEART_SOLID
         } else {
-            "<i class=\"fa-regular fa-heart\"></i>"
+            icons::HEART_OUTLINE
         },
     );
     let _ = el("playerFavBtn").set_attribute(
@@ -1050,7 +1050,7 @@ fn episode_card(ep: &Value, index: usize, artwork: &str, current_url: &str) -> S
     } else {
         number
     };
-    format!("<button class=\"episode-card {}\" data-player-action=\"episode\" data-url=\"{}\" {}><span class=\"episode-art\">{}<span class=\"episode-play\"><i class=\"fa-solid fa-play\"></i></span></span><span class=\"episode-copy\"><small>{}</small><strong>{}</strong></span><span class=\"episode-number\">{}</span></button>",if active{"active"}else{""},esc(&url),if active{"aria-current=\"true\""}else{""},if artwork.is_empty(){"<i class=\"fa-solid fa-film\"></i>".into()}else{format!("<img src=\"{}\" alt=\"\" loading=\"lazy\" decoding=\"async\">",esc(artwork))},if active{"تشاهد الآن"}else{""},esc(&s(ep,"title")),esc(&number))
+    format!("<button class=\"episode-card {}\" data-player-action=\"episode\" data-url=\"{}\" {}><span class=\"episode-art\">{}<span class=\"episode-play\">{}</span></span><span class=\"episode-copy\"><small>{}</small><strong>{}</strong></span><span class=\"episode-number\">{}</span></button>",if active{"active"}else{""},esc(&url),if active{"aria-current=\"true\""}else{""},if artwork.is_empty(){icons::FILM.into()}else{format!("<img src=\"{}\" alt=\"\" loading=\"lazy\" decoding=\"async\">",esc(artwork))},icons::PLAY,if active{"تشاهد الآن"}else{""},esc(&s(ep,"title")),esc(&number))
 }
 fn render_drawer() {
     let (episodes, season, episode) = STATE.with(|c| {
@@ -1157,10 +1157,10 @@ pub fn open_sources() {
     let mut found = false;
     for offer in offers.iter().filter(|o| catalogue::provider(o) == other) {
         found = true;
-        content.push_str(&format!("<button class=\"sheet-row\" data-player-action=\"provider\" data-url=\"{}\"><span>نفس الحلقة من {}</span><i class=\"fa-solid fa-arrow-right-arrow-left\"></i></button>",esc(&s(offer,"url")),source_name(other)));
+        content.push_str(&format!("<button class=\"sheet-row\" data-player-action=\"provider\" data-url=\"{}\"><span>نفس الحلقة من {}</span>{}</button>",esc(&s(offer,"url")),source_name(other),icons::SWITCH));
     }
     if !found {
-        content.push_str(&format!("<button class=\"sheet-row\" data-player-action=\"discover\" data-source=\"{other}\"><span>ابحث عن نفس العمل في {}</span><i class=\"fa-solid fa-arrow-right-arrow-left\"></i></button>",source_name(other)));
+        content.push_str(&format!("<button class=\"sheet-row\" data-player-action=\"discover\" data-source=\"{other}\"><span>ابحث عن نفس العمل في {}</span>{}</button>",source_name(other),icons::SWITCH));
     }
 
     let ed = catalogue::edition(&episode);
@@ -1168,9 +1168,9 @@ pub fn open_sources() {
     let target_ed = if is_dubbed { "original" } else { "dubbed" };
     let target_label = if is_dubbed { "المترجمة" } else { "المدبلجة" };
     let target_pill = if is_dubbed {
-        "<span class=\"sheet-pill subbed\"><i class=\"fa-solid fa-closed-captioning\"></i> مترجم</span>"
+        format!("<span class=\"sheet-pill subbed\">{} مترجم</span>", icons::SUBTITLES)
     } else {
-        "<span class=\"sheet-pill dubbed\"><i class=\"fa-solid fa-microphone\"></i> مدبلج</span>"
+        format!("<span class=\"sheet-pill dubbed\">{} مدبلج</span>", icons::DUBBED)
     };
     let direct_url = offers
         .iter()
@@ -1194,8 +1194,9 @@ pub fn open_sources() {
         let is_direct = name.eq_ignore_ascii_case("ok");
         if is_direct {
             content.push_str(&format!(
-                "<button class=\"sheet-row\" data-player-action=\"embed\" data-index=\"{i}\"><span>سيرفر مباشر ({})</span><span class=\"sheet-pill direct\"><i class=\"fa-solid fa-bolt\"></i> مباشر</span></button>",
-                esc(&name)
+                "<button class=\"sheet-row\" data-player-action=\"embed\" data-index=\"{i}\"><span>سيرفر مباشر ({})</span><span class=\"sheet-pill direct\">{} مباشر</span></button>",
+                esc(&name),
+                icons::BOLT
             ));
         } else {
             content.push_str(&format!(
@@ -1585,23 +1586,23 @@ pub fn open_quality() {
         let active = current_hls_audio_track();
         for (index, name) in &audio_tracks {
             let is_active = *index == active;
-            let icon = if is_active { "<i class=\"fa-solid fa-check\"></i> " } else { "" };
-            content.push_str(&format!("<button class=\"sheet-row\" data-player-action=\"audio-track\" data-index=\"{index}\"><span>{icon}{name}</span></button>"));
+            let icon = if is_active { icons::CHECK } else { "" };
+            content.push_str(&format!("<button class=\"sheet-row\" data-player-action=\"audio-track\" data-index=\"{index}\"><span class=\"sheet-row-label\">{icon}{name}</span></button>"));
         }
     }
     content.push_str("<div class=\"sheet-sub-title\" style=\"margin-top:14px;\">حجم خط الترجمة</div>");
     let current_size = storage("zoet_sub_size").unwrap_or_else(|| "medium".into());
     for (sz_key, sz_label) in [("small", "صغير"), ("medium", "متوسط (افتراضي)"), ("large", "كبير")] {
         let is_active = current_size == sz_key;
-        let icon = if is_active { "<i class=\"fa-solid fa-check\"></i> " } else { "" };
-        content.push_str(&format!("<button class=\"sheet-row\" data-player-action=\"sub-size\" data-size=\"{sz_key}\"><span>{icon}{sz_label}</span></button>"));
+        let icon = if is_active { icons::CHECK } else { "" };
+        content.push_str(&format!("<button class=\"sheet-row\" data-player-action=\"sub-size\" data-size=\"{sz_key}\"><span class=\"sheet-row-label\">{icon}{sz_label}</span></button>"));
     }
     content.push_str("<div class=\"sheet-sub-title\" style=\"margin-top:14px;\">لون خط الترجمة</div>");
     let current_color = storage("zoet_sub_color").unwrap_or_else(|| "yellow".into());
     for (c_key, c_label, _) in SUB_COLORS {
         let is_active = current_color == c_key;
-        let icon = if is_active { "<i class=\"fa-solid fa-check\"></i> " } else { "" };
-        content.push_str(&format!("<button class=\"sheet-row\" data-player-action=\"sub-color\" data-color=\"{c_key}\"><span>{icon}{c_label}</span></button>"));
+        let icon = if is_active { icons::CHECK } else { "" };
+        content.push_str(&format!("<button class=\"sheet-row\" data-player-action=\"sub-color\" data-color=\"{c_key}\"><span class=\"sheet-row-label\">{icon}{c_label}</span></button>"));
     }
     app::open_sheet("خيارات المشغل والصوت", &content);
 }
@@ -2020,7 +2021,7 @@ pub fn take_snapshot() {
             let _ = link.set_attribute("download", &format!("ZOET_{clean_title}_{:.0}.png", v.current_time()));
             if let Ok(link_el) = link.dyn_into::<HtmlElement>() {
                 link_el.click();
-                pill("تم حفظ لقطة الشاشة 📷");
+                pill("تم حفظ لقطة الشاشة");
                 return;
             }
         }
@@ -2075,7 +2076,7 @@ pub fn toggle_mute() {
     let v = video();
     let muted = !v.muted();
     v.set_muted(muted);
-    pill(if muted { "تم كتم الصوت 🔇" } else { "تم تشغيل الصوت 🔊" });
+    pill(if muted { "تم كتم الصوت" } else { "تم تشغيل الصوت" });
 }
 pub fn init_sub_drag_and_drop() {
     on("playerCanvas", "dragover", |event| {
@@ -2314,12 +2315,12 @@ pub fn controls_help() {
         ("M", "كتم الصوت"),
         ("F / P", "ملء الشاشة / صورة مصغرة"),
         ("T", "وضع المسرح / شاشة عريضة"),
-        ("V", "فلاتر الصورة (أنمي / سينما / ليلي) 🎨"),
-        ("B", "مضخم الصوت حتى 300% ⚡"),
+        ("V", "فلاتر الصورة (أنمي / سينما / ليلي)"),
+        ("B", "مضخم الصوت حتى 300%"),
         ("G / H", "مزامنة الترجمة (- / +)"),
         ("Shift+C", "لون الترجمة (أصفر / أبيض / نيون)"),
-        ("Shift+S", "التقاط لقطة شاشة 📷"),
-        ("🎮 Gamepad", "دعم كامل ليد تحكم إكس بوكس وبلايستيشن"),
+        ("Shift+S", "التقاط لقطة شاشة"),
+        ("Gamepad", "دعم كامل ليد تحكم إكس بوكس وبلايستيشن"),
         ("عجلة الفأرة", "مستوى الصوت بدقة"),
         ("C / Q", "الترجمة / الجودة"),
         ("E / S", "الحلقات / المصادر"),
@@ -2792,11 +2793,11 @@ pub fn init() {
         }
     });
     on("nativePlayer", "play", |_| {
-        html("centerPlay", "<i class=\"fa-solid fa-pause\"></i>");
+        html("centerPlay", icons::PAUSE);
         bridge("setVideoPlaying", true.into());
     });
     on("nativePlayer", "pause", |_| {
-        html("centerPlay", "<i class=\"fa-solid fa-play\"></i>");
+        html("centerPlay", icons::PLAY);
         bridge("setVideoPlaying", false.into());
     });
     on("nativePlayer", "timeupdate", |_| progress());

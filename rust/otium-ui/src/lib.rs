@@ -3,6 +3,7 @@ mod app;
 mod catalogue;
 mod dom;
 mod gamepad;
+mod icons;
 mod player;
 
 use wasm_bindgen::prelude::*;

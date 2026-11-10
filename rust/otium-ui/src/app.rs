@@ -1,4 +1,4 @@
-use crate::{api, catalogue, dom::*, player};
+use crate::{api, catalogue, dom::*, icons, player};
 use gloo_timers::callback::Timeout;
 use js_sys::{Function, Reflect};
 use serde_json::{json, Value};
@@ -30,6 +30,7 @@ struct Listing {
 }
 struct State {
     view: String,
+    last_catalog_view: String,
     source: String,
     main: Listing,
     search: Listing,
@@ -47,6 +48,7 @@ impl Default for State {
     fn default() -> Self {
         Self {
             view: "series".into(),
+            last_catalog_view: "series".into(),
             source: storage("zoet_source")
                 .or_else(|| storage("otium_source"))
                 .filter(|s| ["all", "krmzi", "cinemana"].contains(&s.as_str()))
@@ -308,11 +310,11 @@ fn card(item: &Value) -> String {
             .map_or(false, |eds| eds.len() > 1);
     let is_dubbed = catalogue::edition(item) == "dubbed";
     let edition_badge = if has_both {
-        "<span class=\"edition-badge edition-multi\"><i class=\"fa-solid fa-layer-group\"></i> مترجم ومدبلج</span>"
+        format!("<span class=\"edition-badge edition-multi\">{} مترجم ومدبلج</span>", icons::LAYERS)
     } else if is_dubbed {
-        "<span class=\"edition-badge edition-dubbed\"><i class=\"fa-solid fa-microphone\"></i> مدبلج</span>"
+        format!("<span class=\"edition-badge edition-dubbed\">{} مدبلج</span>", icons::DUBBED)
     } else {
-        "<span class=\"edition-badge edition-subbed\"><i class=\"fa-solid fa-closed-captioning\"></i> مترجم</span>"
+        format!("<span class=\"edition-badge edition-subbed\">{} مترجم</span>", icons::SUBTITLES)
     };
     let badges = sources
         .iter()
@@ -326,7 +328,13 @@ fn card(item: &Value) -> String {
         .collect::<String>();
     let year = s(item, "year");
     let rating = s(item, "rating");
-    format!("<button class=\"series-tile\" data-action=\"{kind}\" data-url=\"{}\"><span class=\"poster-frame\"><img class=\"series-tile-thumb\" src=\"{}\" alt=\"\" loading=\"lazy\" decoding=\"async\" referrerpolicy=\"no-referrer\">{edition_badge}</span><span class=\"series-tile-body\"><span class=\"series-tile-title\">{}</span><span class=\"series-tile-sub\">{}{}</span><span class=\"catalogue-sources\">{badges}</span></span></button>",esc(&s(item,"url")),esc(&thumbnail),esc(&title),esc(&year),if rating.is_empty(){String::new()}else{format!(" · ★ {}",esc(&rating))})
+    let meta = match (year.is_empty(), rating.is_empty()) {
+        (false, false) => format!("<span>{}</span><span class=\"meta-dot\">·</span><span class=\"tile-rate\">{} {}</span>", esc(&year), icons::STAR, esc(&rating)),
+        (false, true) => format!("<span>{}</span>", esc(&year)),
+        (true, false) => format!("<span class=\"tile-rate\">{} {}</span>", icons::STAR, esc(&rating)),
+        (true, true) => String::new(),
+    };
+    format!("<button class=\"series-tile\" data-action=\"{kind}\" data-url=\"{}\"><span class=\"poster-frame\"><img class=\"series-tile-thumb\" src=\"{}\" alt=\"\" loading=\"lazy\" decoding=\"async\" referrerpolicy=\"no-referrer\">{edition_badge}</span><span class=\"series-tile-body\"><span class=\"series-tile-title\">{}</span><span class=\"series-tile-sub\">{meta}</span><span class=\"catalogue-sources\">{badges}</span></span></button>",esc(&s(item,"url")),esc(&thumbnail),esc(&title))
 }
 fn render_grid(id: &str, items: &[Value]) {
     let grid = el(id);
@@ -475,7 +483,8 @@ fn render_listing(search: bool) {
     );
     if !search {
         text("seriesCountSub", "");
-        let is_offline = items.is_empty() && pending == 0 && !failed.is_empty();
+        let in_catalog = view == "series" || view == "movies";
+        let is_offline = in_catalog && items.is_empty() && pending == 0 && !failed.is_empty();
         show("offlineState", is_offline);
         if is_offline && view == "movies" {
             text("offlineTitle", "أفلام سينمانا غير متاحة على اتصالك");
@@ -641,10 +650,26 @@ fn load_listing(search: bool, reset: bool) {
     }
 }
 pub fn set_view(view: &str) {
-    STATE.with(|state| state.borrow_mut().view = view.into());
+    let in_catalog = view == "series" || view == "movies";
+    STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        state.view = view.into();
+        if in_catalog {
+            state.last_catalog_view = view.into();
+        }
+    });
     show("libraryView", view == "library");
-    show("seriesSection", view != "library");
-    show("sourceSwitcher", view != "library");
+    if document().get_element_by_id("settingsView").is_some() {
+        show("settingsView", view == "settings");
+    }
+    show("seriesSection", in_catalog);
+    show("sourceSwitcher", in_catalog);
+    if document().get_element_by_id("catalogueTabs").is_some() {
+        show("catalogueTabs", in_catalog);
+    }
+    if !in_catalog {
+        show("offlineState", false);
+    }
     text(
         "catalogueTitle",
         if view == "movies" {
@@ -670,6 +695,21 @@ pub fn set_view(view: &str) {
         let _ = el(id).set_attribute("aria-selected", &active.to_string());
         let _ = el(id).class_list().toggle_with_force("active", active);
     }
+    for (id, active) in [
+        ("navCatalogBtn", in_catalog),
+        ("openLibraryBtn", view == "library"),
+        ("openSettingsBtn", view == "settings"),
+    ] {
+        if let Some(btn) = document().get_element_by_id(id) {
+            let _ = btn.class_list().toggle_with_force("active", active);
+            let _ = btn.set_attribute("aria-pressed", &active.to_string());
+            if active {
+                let _ = btn.set_attribute("aria-current", "page");
+            } else {
+                let _ = btn.remove_attribute("aria-current");
+            }
+        }
+    }
     for (id, v) in [("deskTabSeries", "series"), ("deskTabMovies", "movies"), ("deskTabLibrary", "library")] {
         if let Some(tab) = document().get_element_by_id(id) {
             let active = view == v;
@@ -679,6 +719,8 @@ pub fn set_view(view: &str) {
     }
     if view == "library" {
         render_library();
+    } else if view == "settings" {
+        // Dedicated settings view; keep existing catalog state ready in background
     } else {
         load_listing(false, true);
     }
@@ -688,7 +730,7 @@ pub fn current_view() -> String {
     STATE.with(|state| state.borrow().view.clone())
 }
 pub fn cycle_view(forward: bool) {
-    let views = ["series", "movies", "library"];
+    let views = ["series", "movies", "library", "settings"];
     let curr = current_view();
     let idx = views.iter().position(|v| *v == curr).unwrap_or(0);
     let next_idx = if forward {
@@ -701,31 +743,58 @@ pub fn cycle_view(forward: bool) {
 pub fn open_controls_guide() {
     open_sheet(
         "اختصارات التحكم",
-        "<div class=\"controls-guide\">\
-        <p>Space / K — تشغيل وإيقاف</p>\
-        <p>J / L — تقديم وتأخير 10 ثوانٍ</p>\
-        <p>الأسهم — تقديم وتأخير / الصوت</p>\
-        <p>F — ملء الشاشة · M — كتم الصوت</p>\
-        <p>S — المصادر · Q — الجودة · E — الحلقات</p>\
-        <p>V — فلاتر الصورة · Shift+C — لون الترجمة</p>\
-        <p>0–9 — الانتقال داخل الحلقة · [ / ] — سرعة التشغيل</p>\
-        <p>Esc — رجوع · / أو Ctrl+K — بحث فوري</p>\
-        <p>🎮 Gamepad — تحكم كامل بيد إكس بوكس وبلايستيشن</p>\
-        <p>عجلة الماوس للتحكم الدقيق بالصوت، ولمستان على الهاتف.</p>\
-        </div>",
+        &format!(
+            "<div class=\"controls-guide\">\
+            <p>Space / K — تشغيل وإيقاف</p>\
+            <p>J / L — تقديم وتأخير 10 ثوانٍ</p>\
+            <p>الأسهم — تقديم وتأخير / الصوت</p>\
+            <p>F — ملء الشاشة · M — كتم الصوت</p>\
+            <p>S — المصادر · Q — الجودة · E — الحلقات</p>\
+            <p>V — فلاتر الصورة · Shift+C — لون الترجمة</p>\
+            <p>0–9 — الانتقال داخل الحلقة · [ / ] — سرعة التشغيل</p>\
+            <p>Esc — رجوع · / أو Ctrl+K — بحث فوري</p>\
+            <p class=\"guide-icon-row\"><span class=\"guide-ico\">{}</span><span>يد التحكم (Gamepad) — تحكم كامل بيد إكس بوكس وبلايستيشن</span></p>\
+            <p>عجلة الماوس للتحكم الدقيق بالصوت، ولمستان على الهاتف.</p>\
+            </div>",
+            icons::GAMEPAD
+        ),
     );
 }
 fn render_library() {
-    let records = STATE.with(|state| {
+    let (records, mode) = STATE.with(|state| {
         let state = state.borrow();
-        if state.library_mode == "favs" {
+        let mode = state.library_mode.clone();
+        let records = if mode == "favs" {
             state.favorites.clone()
         } else {
             state.history.clone()
-        }
+        };
+        (records, mode)
     });
     render_grid("libraryGrid", &records);
-    let mode = STATE.with(|state| state.borrow().library_mode.clone());
+    if records.is_empty() {
+        let (msg, sub) = if mode == "favs" {
+            (
+                "لا توجد أعمال في المفضلة بعد",
+                "احفظ المسلسلات أو الأفلام من المشغل للرجوع إليها بسرعة.",
+            )
+        } else {
+            (
+                "سجل المشاهدة فارغ حالياً",
+                "ستظهر هنا الأعمال التي تشاهدها لتكملها من حيث توقفت.",
+            )
+        };
+        html(
+            "libraryGrid",
+            &format!(
+                "<div class=\"library-empty-state\">{}<strong>{msg}</strong><p>{sub}</p></div>",
+                icons::EMPTY_BOOKMARK
+            ),
+        );
+    }
+    if document().get_element_by_id("clearHistoryBtn").is_some() {
+        show("clearHistoryBtn", mode == "hist" && !records.is_empty());
+    }
     if let Ok(buttons) = el("libraryView").query_selector_all("[data-library]") {
         for i in 0..buttons.length() {
             if let Some(button) = buttons.item(i).and_then(|n| n.dyn_into::<Element>().ok()) {
@@ -910,18 +979,20 @@ fn render_series_detail(series: &Value) {
     let edition_switcher = format!(
         "<div class=\"series-edition-tabs\">\
             <button class=\"series-edition-tab{}\" data-action=\"series-edition\" data-edition=\"original\" data-url=\"{}\" data-title=\"{}\">\
-                <i class=\"fa-solid fa-closed-captioning\"></i> النسخة المترجمة\
+                {} النسخة المترجمة\
             </button>\
             <button class=\"series-edition-tab{}\" data-action=\"series-edition\" data-edition=\"dubbed\" data-url=\"{}\" data-title=\"{}\">\
-                <i class=\"fa-solid fa-microphone\"></i> النسخة المدبلجة\
+                {} النسخة المدبلجة\
             </button>\
         </div>",
         if !is_dubbed { " active" } else { "" },
         esc(&subbed_url),
         esc(&clean_title),
+        icons::SUBTITLES,
         if is_dubbed { " active" } else { "" },
         esc(&dubbed_url),
-        esc(&clean_title)
+        esc(&clean_title),
+        icons::DUBBED
     );
 
     let current_ed_offers: Vec<&Value> = offers
@@ -959,11 +1030,19 @@ fn render_series_detail(series: &Value) {
         ""
     };
     let ed_pill = if has_both {
-        "<span class=\"series-edition-pill multi\"><i class=\"fa-solid fa-layer-group\"></i> مترجم ومدبلج</span>"
+        format!("<span class=\"series-edition-pill multi\">{} مترجم ومدبلج</span>", icons::LAYERS)
     } else if is_dubbed {
-        "<span class=\"series-edition-pill dubbed\"><i class=\"fa-solid fa-microphone\"></i> مدبلج</span>"
+        format!("<span class=\"series-edition-pill dubbed\">{} مدبلج</span>", icons::DUBBED)
     } else {
-        "<span class=\"series-edition-pill subbed\"><i class=\"fa-solid fa-closed-captioning\"></i> مترجم</span>"
+        format!("<span class=\"series-edition-pill subbed\">{} مترجم</span>", icons::SUBTITLES)
+    };
+    let year_tag = {
+        let y = s(series, "year");
+        if y.is_empty() { String::new() } else { format!("<span class=\"series-source-tag\">{}</span>", esc(&y)) }
+    };
+    let rate_tag = {
+        let r = s(series, "rating");
+        if r.is_empty() { String::new() } else { format!("<span class=\"series-source-tag series-rate-tag\">{} {}</span>", icons::STAR, esc(&r)) }
     };
 
     open_sheet(
@@ -975,7 +1054,7 @@ fn render_series_detail(series: &Value) {
                 <div class=\"series-detail-info\">\
                     <div class=\"series-badges-row\">\
                         <span class=\"series-source-tag\">{}</span>\
-                        {}\
+                        {}{}{}\
                     </div>\
                     <h4>{}</h4>\
                     {}\
@@ -986,19 +1065,22 @@ fn render_series_detail(series: &Value) {
             {}\
             <div class=\"series-episode-heading\"><h5>الحلقات</h5><span>{}</span></div>\
             <div class=\"season-tabs\" id=\"sheetSeasonTabs\">{tabs}</div>\
-            <label class=\"episode-search\"><i class=\"fa-solid fa-magnifying-glass\"></i>\
+            <label class=\"episode-search\">{}\
                 <input id=\"sheetEpisodeSearch\" type=\"search\" placeholder=\"ابحث عن حلقة\" aria-label=\"ابحث عن حلقة\">\
             </label>\
             <div class=\"sheet-episode-grid episode-card-list\" id=\"seriesEpisodeList\" data-season=\"{}\"></div>",
             esc(&poster),
             source_name(catalogue::provider(series)),
             ed_pill,
+            year_tag,
+            rate_tag,
             esc(&clean_title),
             edition_switcher,
             providers,
             esc(&s(series, "story")),
             story_toggle,
             episodes.len(),
+            icons::SEARCH,
             esc(seasons.first().map(String::as_str).unwrap_or("1"))
         ),
     );
@@ -1110,7 +1192,7 @@ fn render_detail_episodes() {
     let episodes = series["episodes"].as_array().cloned().unwrap_or_default();
     let markup=episodes.iter().filter(|ep|{let ep_season=s(ep,"season");(ep_season==season || (ep_season.is_empty()&&season=="1"))&&(query.is_empty()||format!("{} {}",s(ep,"title"),catalogue::episode_number(ep)).contains(&query))}).enumerate().map(|(index,ep)|{
         let number=catalogue::episode_number(ep);
-        format!("<button class=\"episode-card sheet-episode-btn\" data-action=\"episode\" data-url=\"{}\"><span class=\"episode-number\">{}</span><span class=\"episode-copy\"><strong>{}</strong><small>{}</small></span><span class=\"episode-play\"><i class=\"fa-solid fa-play\"></i></span></button>",esc(&s(ep,"url")),if number.is_empty(){(index+1).to_string()}else{esc(&number)},esc(&s(ep,"title")),esc(&s(&series,"title")))
+        format!("<button class=\"episode-card sheet-episode-btn\" data-action=\"episode\" data-url=\"{}\"><span class=\"episode-number\">{}</span><span class=\"episode-copy\"><strong>{}</strong><small>{}</small></span><span class=\"episode-play\">{}</span></button>",esc(&s(ep,"url")),if number.is_empty(){(index+1).to_string()}else{esc(&number)},esc(&s(ep,"title")),esc(&s(&series,"title")),icons::PLAY)
     }).collect::<String>();
     list.set_inner_html(if markup.is_empty() {
         "<p class=\"empty-note\">لا توجد حلقات مطابقة.</p>"
@@ -1131,13 +1213,13 @@ fn click(event: Event) {
         return;
     }
     let Some(button) = target
-        .closest("[data-action],[data-source],[data-desk-source],[data-library]")
+        .closest("[data-action],[data-source],[data-pref-source],[data-library]")
         .ok()
         .flatten()
     else {
         return;
     };
-    if let Some(source) = button.get_attribute("data-source").or_else(|| button.get_attribute("data-desk-source")) {
+    if let Some(source) = button.get_attribute("data-source").or_else(|| button.get_attribute("data-pref-source")) {
         STATE.with(|state| {
             let mut state = state.borrow_mut();
             state.source = source.clone();
@@ -1280,12 +1362,12 @@ fn search_close_if_open() {
 }
 fn update_source() {
     let source = STATE.with(|state| state.borrow().source.clone());
-    if let Ok(buttons) = document().query_selector_all("[data-source],[data-desk-source]") {
+    if let Ok(buttons) = document().query_selector_all("[data-source],[data-pref-source]") {
         for i in 0..buttons.length() {
             if let Some(button) = buttons.item(i).and_then(|n| n.dyn_into::<Element>().ok()) {
                 let attr = button
                     .get_attribute("data-source")
-                    .or_else(|| button.get_attribute("data-desk-source"));
+                    .or_else(|| button.get_attribute("data-pref-source"));
                 let active = attr.as_deref() == Some(&source);
                 let _ = button.class_list().toggle_with_force("active", active);
                 let _ = button.set_attribute("aria-pressed", &active.to_string());
@@ -1296,17 +1378,21 @@ fn update_source() {
 fn open_backup_sheet() {
     open_sheet(
         "النسخ الاحتياطي ونقل البيانات",
-        "<div class=\"backup-dialog\">\
-            <p class=\"backup-desc\">احفظ سجلك ومفضلتك بدون أي حساب سحابي، وانقلها لأي هاتف أو شاشة ذكية بسهولة.</p>\
-            <div class=\"backup-row\">\
-                <button class=\"load-more-btn\" data-action=\"export-backup\"><i class=\"fa-solid fa-copy\"></i> تصدير ونسخ بياناتي</button>\
-            </div>\
-            <div class=\"backup-import-section\">\
-                <label for=\"backupTextarea\">كود النسخة الاحتياطية:</label>\
-                <textarea id=\"backupTextarea\" rows=\"4\" placeholder=\"ألصق كود النسخة الاحتياطية هنا...\"></textarea>\
-                <button class=\"load-more-btn secondary\" data-action=\"import-backup\"><i class=\"fa-solid fa-file-import\"></i> استعادة البيانات الآن</button>\
-            </div>\
-        </div>"
+        &format!(
+            "<div class=\"backup-dialog\">\
+                <p class=\"backup-desc\">احفظ سجلك ومفضلتك بدون أي حساب سحابي، وانقلها لأي هاتف أو شاشة ذكية بسهولة.</p>\
+                <div class=\"backup-row\">\
+                    <button class=\"load-more-btn\" data-action=\"export-backup\">{} تصدير ونسخ بياناتي</button>\
+                </div>\
+                <div class=\"backup-import-section\">\
+                    <label for=\"backupTextarea\">كود النسخة الاحتياطية:</label>\
+                    <textarea id=\"backupTextarea\" rows=\"4\" placeholder=\"ألصق كود النسخة الاحتياطية هنا...\"></textarea>\
+                    <button class=\"load-more-btn secondary\" data-action=\"import-backup\">{} استعادة البيانات الآن</button>\
+                </div>\
+            </div>",
+            icons::COPY,
+            icons::IMPORT
+        ),
     );
 }
 fn apply_display() {
@@ -1334,6 +1420,12 @@ fn apply_display() {
             "mobile"
         },
     );
+    if document().get_element_by_id("desktopWindowControls").is_some() {
+        let in_tauri = Reflect::get(window().as_ref(), &"__TAURI__".into())
+            .ok()
+            .is_some_and(|v| !v.is_undefined() && !v.is_null());
+        show("desktopWindowControls", in_tauri);
+    }
     if let Some(select) = document()
         .get_element_by_id("displayModeSelect")
         .and_then(|element| element.dyn_into::<web_sys::HtmlSelectElement>().ok())
@@ -1431,6 +1523,11 @@ fn keyboard(event: KeyboardEvent) {
             }
         }
         search_open();
+    }
+    if !editable && !player::is_open() && event.key() == "?" {
+        event.prevent_default();
+        open_controls_guide();
+        return;
     }
     if document()
         .document_element()
@@ -1602,6 +1699,25 @@ pub fn init() {
     on("tabMovies", "click", |_| set_view("movies"));
     on("openLibraryBtn", "click", |_| set_view("library"));
     on("brandBtn", "click", |_| set_view("series"));
+    if document().get_element_by_id("navCatalogBtn").is_some() {
+        on("navCatalogBtn", "click", |_| {
+            let (curr, last) = STATE.with(|s| {
+                let s = s.borrow();
+                (s.view.clone(), s.last_catalog_view.clone())
+            });
+            if curr == "series" || curr == "movies" {
+                let opts = web_sys::ScrollToOptions::new();
+                opts.set_top(0.0);
+                opts.set_behavior(web_sys::ScrollBehavior::Smooth);
+                el("contentCanvas").scroll_to_with_scroll_to_options(&opts);
+            } else {
+                set_view(&last);
+            }
+        });
+    }
+    if document().get_element_by_id("openSettingsBtn").is_some() {
+        on("openSettingsBtn", "click", |_| set_view("settings"));
+    }
     if document().get_element_by_id("deskTabSeries").is_some() {
         on("deskTabSeries", "click", |_| set_view("series"));
         on("deskTabMovies", "click", |_| set_view("movies"));
@@ -1707,7 +1823,7 @@ pub fn init() {
             let scroll_top = canvas.scroll_top();
             let scroll_height = canvas.scroll_height();
             let client_height = canvas.client_height();
-            if scroll_height - scroll_top - client_height < 700 {
+            if scroll_height - scroll_top - client_height < 350 {
                 let should_load = STATE.with(|state| {
                     let state = state.borrow();
                     state.main.pending == 0
@@ -1725,7 +1841,7 @@ pub fn init() {
                 let scroll_top = area.scroll_top();
                 let scroll_height = area.scroll_height();
                 let client_height = area.client_height();
-                if scroll_height - scroll_top - client_height < 700 {
+                if scroll_height - scroll_top - client_height < 350 {
                     let should_load = STATE.with(|state| {
                         let state = state.borrow();
                         state.search.pending == 0
@@ -1759,7 +1875,16 @@ pub fn init() {
         STATE.with(|state| state.borrow_mut().history.clear());
         store("krmzi_hist", "[]");
         render_library();
+        notify("تم مسح سجل المشاهدة");
     });
+    if document().get_element_by_id("settingsClearHistoryBtn").is_some() {
+        on("settingsClearHistoryBtn", "click", |_| {
+            STATE.with(|state| state.borrow_mut().history.clear());
+            store("krmzi_hist", "[]");
+            render_library();
+            notify("تم مسح سجل المشاهدة");
+        });
+    }
     on("displayModeSelect", "change", |_| {
         let select = el("displayModeSelect")
             .dyn_into::<web_sys::HtmlSelectElement>()

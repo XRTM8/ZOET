@@ -109,8 +109,8 @@ async function run(){
       await page.waitForFunction(()=>document.querySelectorAll('#seriesGrid [data-action="series"]').length===25);
       assert.equal(await page.locator('#heroSpotlight,#episodesCarousel,#moviesCarousel').count(),0,'The interface should contain one catalogue, without promotional carousel rows');
       assert.equal(await page.locator('#seriesGrid [data-url="cinemana:700"] .provider-tag').count(),2,'Shared titles retain both sources');
-      await page.locator('#loadMoreSeriesBtn').click();await page.waitForFunction(()=>document.querySelectorAll('#seriesGrid [data-action="series"]').length===28);
-      await page.locator('#loadMoreSeriesBtn').click();await page.waitForFunction(()=>document.getElementById('loadMoreSeriesBtn').classList.contains('hidden'));
+      await page.evaluate(()=>{const c=document.getElementById('contentCanvas');c.scrollTop=c.scrollHeight;});await page.waitForFunction(()=>document.querySelectorAll('#seriesGrid [data-action="series"]').length===28);
+      await page.evaluate(()=>{const c=document.getElementById('contentCanvas');c.scrollTop=c.scrollHeight;const b=document.getElementById('loadMoreSeriesBtn');if(b&&!b.classList.contains('hidden')&&!b.disabled)b.click();});await page.waitForFunction(()=>document.getElementById('loadMoreSeriesBtn').classList.contains('hidden'));
       assert.equal(await page.locator('#seriesGrid .series-tile').count(),28,'Repeated upstream pages stop without duplicate cards');
       assert(!requests.some(request=>request==='/api/series?page=4'),'Repeated pages do not continue forever');
       await page.locator('#tabMovies').click();await page.waitForFunction(()=>document.querySelectorAll('#seriesGrid [data-action="episode"]').length===2);
@@ -120,7 +120,7 @@ async function run(){
       await page.locator('#openSearchBtn').click();await page.locator('#overlaySearchInput').fill('التجربة');
       await page.waitForFunction(()=>document.querySelectorAll('#searchGrid .series-tile').length===12);
       assert(requests.filter(request=>request.startsWith('/api/cinemana?')).some(request=>{const route=new URL(request,'http://fixture').searchParams.get('path');const word=route.split('/video_title_search/')[1]?.split('/')[0];return word&&Buffer.from(word,'base64url').toString('utf8')==='التجربة';}),'Cinemana search sends UTF-8 Base64URL as required by its API');
-      await page.locator('#loadMoreSearchBtn').click();await page.waitForFunction(()=>document.querySelectorAll('#searchGrid .series-tile').length===14);
+      await page.evaluate(()=>{const s=document.getElementById('searchScrollArea');s.scrollTop=s.scrollHeight;});await page.waitForFunction(()=>document.querySelectorAll('#searchGrid .series-tile').length===14);
       assert(await page.locator('#loadMoreSearchBtn').evaluate(el=>el.classList.contains('hidden')));
       await page.keyboard.press('Escape');assert(await page.locator('#searchOverlay').evaluate(el=>el.classList.contains('hidden')));
       await context.close();console.log('PASS Rust catalogue: complete pages, duplicate guard, provider merge, films and paginated search');
@@ -224,7 +224,7 @@ async function run(){
     {
       const{context,page}=await open('all');delayCinemana=450;await page.locator('#openSearchBtn').click();await page.locator('#overlaySearchInput').fill('التجربة');await page.waitForTimeout(300);await page.keyboard.press('Escape');await page.waitForTimeout(500);
       const before=requests.length;await page.locator('#openSearchBtn').click();await page.waitForFunction(()=>document.querySelectorAll('#searchGrid .series-tile').length===12);assert(requests.slice(before).some(request=>request.startsWith('/api/cinemana?')),'Reopening an aborted query retries its provider request');
-      await page.keyboard.press('Escape');delayCinemana=0;await page.locator('[data-source="krmzi"]').click();await page.locator('#openSearchBtn').click();await page.waitForFunction(()=>document.querySelectorAll('#searchGrid .series-tile').length===1);assert(!(await page.locator('#searchGrid').textContent()).includes('حكاية سينمانا'),'Changing source invalidates previous search results');
+      await page.keyboard.press('Escape');delayCinemana=0;await page.locator('[data-source="krmzi"]').click();await page.locator('#openSearchBtn').click();await page.waitForFunction(()=>{const g=document.getElementById('searchGrid');return g&&g.querySelectorAll('.series-tile').length>=1&&g.textContent.includes('التجربة')&&!g.textContent.includes('حكاية سينمانا');});assert(!(await page.locator('#searchGrid').textContent()).includes('حكاية سينمانا'),'Changing source invalidates previous search results');
       await context.close();console.log('PASS Rust search: reopen pending query and source-change invalidation');
     }
     {

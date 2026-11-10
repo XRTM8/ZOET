@@ -793,6 +793,9 @@ function __wbg_get_imports() {
         __wbg_scrollIntoView_168afe76e10ce285: function(arg0, arg1) {
             arg0.scrollIntoView(arg1 !== 0);
         },
+        __wbg_scrollTo_797242fbcc8a4338: function(arg0, arg1) {
+            arg0.scrollTo(arg1);
+        },
         __wbg_scrollTop_960220fc942d86fa: function(arg0) {
             const ret = arg0.scrollTop;
             return ret;
@@ -832,6 +835,9 @@ function __wbg_get_imports() {
         __wbg_set_bcb0ec2400cfa22e: function() { return handleError(function (arg0, arg1, arg2, arg3, arg4) {
             arg0.set(getStringFromWasm0(arg1, arg2), getStringFromWasm0(arg3, arg4));
         }, arguments); },
+        __wbg_set_behavior_162aafb93f17509a: function(arg0, arg1) {
+            arg0.behavior = __wbindgen_enum_ScrollBehavior[arg1];
+        },
         __wbg_set_cache_7a23201e29cbd632: function(arg0, arg1) {
             arg0.cache = __wbindgen_enum_RequestCache[arg1];
         },
@@ -882,6 +888,9 @@ function __wbg_get_imports() {
         },
         __wbg_set_textContent_0177b2a6d9293c2c: function(arg0, arg1, arg2) {
             arg0.textContent = arg1 === 0 ? undefined : getStringFromWasm0(arg1, arg2);
+        },
+        __wbg_set_top_f7599da231834d9f: function(arg0, arg1) {
+            arg0.top = arg1;
         },
         __wbg_set_value_892851ccbfe211bd: function(arg0, arg1) {
             arg0.value = arg1;
@@ -1038,7 +1047,7 @@ function __wbg_get_imports() {
             return ret;
         },
         __wbindgen_generic_0000000000000002: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 295, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 301, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen_b1e90fbcb8af5bbf___convert__closures_____invoke___wasm_bindgen_b1e90fbcb8af5bbf___JsValue__core_37ee0ce0c4cd57d5___result__Result_____wasm_bindgen_b1e90fbcb8af5bbf___JsError___true_);
             return ret;
         },
@@ -1058,7 +1067,7 @@ function __wbg_get_imports() {
             return ret;
         },
         __wbindgen_generic_0000000000000006: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [], shim_idx: 293, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [], shim_idx: 299, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen_b1e90fbcb8af5bbf___convert__closures_____invoke_______true_);
             return ret;
         },
@@ -1122,6 +1131,9 @@ function wasm_bindgen_b1e90fbcb8af5bbf___convert__closures_____invoke___f64_____
 
 
 const __wbindgen_enum_RequestCache = ["default", "no-store", "reload", "no-cache", "force-cache", "only-if-cached"];
+
+
+const __wbindgen_enum_ScrollBehavior = ["auto", "instant", "smooth"];
 
 
 const __wbindgen_enum_TextTrackMode = ["disabled", "hidden", "showing"];

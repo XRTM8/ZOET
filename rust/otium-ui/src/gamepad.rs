@@ -67,9 +67,9 @@ fn poll_gamepads() {
         // Detect connection transition
         if total_connected > 0 && st.connected_count == 0 {
             if player::is_open() {
-                player::pill("تم توصيل يد التحكم 🎮");
+                player::pill("تم توصيل يد التحكم");
             } else {
-                app::notify("تم توصيل يد التحكم 🎮");
+                app::notify("تم توصيل يد التحكم");
             }
         } else if total_connected == 0 && st.connected_count > 0 {
             if player::is_open() {
