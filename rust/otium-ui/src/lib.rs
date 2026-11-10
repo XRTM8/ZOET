@@ -5,6 +5,7 @@ mod dom;
 mod gamepad;
 mod icons;
 mod player;
+mod search;
 
 use wasm_bindgen::prelude::*;
 

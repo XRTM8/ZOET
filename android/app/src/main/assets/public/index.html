@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="preload" href="fonts/tajawal-5.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="fonts/tajawal.css">
-  <link rel="stylesheet" href="styles.css?v=2.9.5">
+  <link rel="stylesheet" href="styles.css?v=2.9.6">
 </head>
 <body>
 <div class="app-frame" id="appFrame">
@@ -236,7 +236,7 @@
               </span>
               <div>
                 <h3>إصدار ZOET</h3>
-                <p id="installedVersionText">v2.9.5</p>
+                <p id="installedVersionText">v2.9.6</p>
               </div>
             </div>
             <button class="check-update-btn" id="manualCheckUpdateBtn">
@@ -287,15 +287,42 @@
       </button>
       <div class="search-bar-wrap">
         <svg class="z-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
-        <input type="search" id="overlaySearchInput" placeholder="اسم فيلم أو مسلسل" autocomplete="off" spellcheck="false" enterkeyhint="search" aria-label="ابحث في المصادر">
+        <input type="search" id="overlaySearchInput" placeholder="ابحث عن فيلم أو مسلسل (عربي أو إنجليزي)" autocomplete="off" spellcheck="false" enterkeyhint="search" aria-label="ابحث في المصادر">
+        <button class="search-clear-btn hidden" id="clearSearchBtn" type="button" aria-label="مسح البحث">
+          <svg class="z-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
       </div>
+    </div>
+    <div class="search-controls-bar" id="searchControlsBar">
+      <div class="search-filter-pills" id="searchTypeFilters" role="group" aria-label="تصفية النتائج">
+        <button class="search-filter-pill active" type="button" data-search-kind="all" aria-pressed="true">الكل</button>
+        <button class="search-filter-pill" type="button" data-search-kind="movie" aria-pressed="false">أفلام</button>
+        <button class="search-filter-pill" type="button" data-search-kind="series" aria-pressed="false">مسلسلات</button>
+      </div>
+      <p class="search-source-status" id="searchSourceStatus" role="status"></p>
     </div>
     <div class="search-scroll-area" id="searchScrollArea">
       <div class="search-zero-state" id="searchInitialState">
-        <h3>ابحث عن عمل</h3>
-        <p>النتائج تجمع المصادر المتاحة.</p>
+        <div class="search-discovery-wrap">
+          <div class="search-recent-section hidden" id="searchRecentWrap">
+            <div class="search-section-head">
+              <h3>عمليات البحث الأخيرة</h3>
+              <button class="search-clear-hist-btn" id="clearRecentSearchesBtn" type="button" data-action="clear-search-history">مسح</button>
+            </div>
+            <div class="search-chip-row" id="searchRecentList"></div>
+          </div>
+          <div class="search-recent-section" id="searchQuickWrap">
+            <div class="search-section-head">
+              <h3>اقتراحات سريعة</h3>
+            </div>
+            <div class="search-chip-row" id="searchQuickList"></div>
+          </div>
+          <div class="search-empty-hint">
+            <p>ابحث بالعربية أو الإنجليزية — تتم مطابقة العنوان وتهجئة الأسماء تلقائياً.</p>
+          </div>
+        </div>
       </div>
-      <p class="search-source-status" id="searchSourceStatus" role="status"></p>
+      <div class="search-recovery-card hidden" id="searchRecoveryCard"></div>
       <div class="media-grid hidden" id="searchGrid"></div>
       <div class="catalogue-pagination">
         <button class="load-more-btn hidden" id="loadMoreSearchBtn">المزيد من النتائج</button>
@@ -588,8 +615,8 @@
 </script>
 <script src="vendor/hls/hls.min.js" defer></script>
 <script type="module">
-import init from './wasm/otium_ui.js?v=2.9.5';
-init({ module_or_path: './wasm/otium_ui_bg.wasm?v=2.9.5' }).catch(() => { document.getElementById('bootStatus').textContent = 'تعذّر تشغيل التطبيق. أعد فتحه أو تحديث المتصفح.'; });
+import init from './wasm/otium_ui.js?v=2.9.6';
+init({ module_or_path: './wasm/otium_ui_bg.wasm?v=2.9.6' }).catch(() => { document.getElementById('bootStatus').textContent = 'تعذّر تشغيل التطبيق. أعد فتحه أو تحديث المتصفح.'; });
 </script>
 </body>
 </html>

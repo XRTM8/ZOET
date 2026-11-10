@@ -1,5 +1,6 @@
-use crate::catalogue;
+use crate::{catalogue, search};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use futures_util::future::join_all;
 use gloo_timers::callback::Timeout;
 use serde_json::{json, Value};
 use wasm_bindgen::{closure::Closure, JsCast};
@@ -292,10 +293,59 @@ pub async fn call_with_signal(
                     json!({"query":"","page":page,"results":[],"hasNext":false,"nextPage":null}),
                 );
             }
-            let path = format!("video/V/2/itemsPerPage/20/video_title_search/{}/itemsPerPage/12/pageNumber/{provider_page}/level/0",search_keyword(&query));
+            let parsed = search::parse_query(&query);
+            let primary_q = if parsed.core.is_empty() {
+                query.clone()
+            } else {
+                parsed.core.clone()
+            };
+            let path = format!(
+                "video/V/2/itemsPerPage/20/video_title_search/{}/itemsPerPage/12/pageNumber/{provider_page}/level/0",
+                search_keyword(&primary_q)
+            );
             let data = cinemana_request(&path, signal).await?;
-            let mut result = paginated(rows(&data).iter().map(card).collect(), page, "results", 12);
+            let primary_rows = rows(&data);
+            let mut has_next = primary_rows.len() >= 12;
+            let mut items: Vec<Value> = primary_rows.iter().map(card).collect();
+            let variants = search::fallback_variants(&query, &parsed);
+            if page == 1 && !variants.is_empty() {
+                let best_primary = items
+                    .iter()
+                    .map(|item| search::score_item(item, &parsed, &variants))
+                    .max()
+                    .unwrap_or(0);
+                if items.len() < 4 || best_primary < search::STRONG_MATCH_THRESHOLD {
+                    let mut seen_urls: std::collections::HashSet<String> = items
+                        .iter()
+                        .filter_map(|item| item["url"].as_str().map(str::to_owned))
+                        .collect();
+                    let extra_futures = variants.iter().take(2).map(|variant| {
+                        let v_path = format!(
+                            "video/V/2/itemsPerPage/20/video_title_search/{}/itemsPerPage/12/pageNumber/0/level/0",
+                            search_keyword(variant)
+                        );
+                        async move { cinemana_request(&v_path, signal).await }
+                    });
+                    for extra in join_all(extra_futures).await.into_iter().flatten() {
+                        let extra_rows = rows(&extra);
+                        has_next |= extra_rows.len() >= 12;
+                        for row in extra_rows {
+                            let c = card(&row);
+                            if let Some(u) = c["url"].as_str() {
+                                if seen_urls.insert(u.to_owned()) {
+                                    items.push(c);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            search::sort_by_relevance(&mut items, &parsed, &variants);
+            let mut result = paginated(items, page, "results", 12);
+            result["hasNext"] = json!(has_next);
+            result["nextPage"] = json!(if has_next { Some(page + 1) } else { None });
             result["query"] = json!(query);
+            result["cleanedQuery"] = json!(primary_q);
             Ok(result)
         }
         "/api/series/detail" | "/api/episode/detail" => {

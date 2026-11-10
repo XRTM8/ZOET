@@ -1,4 +1,4 @@
-use crate::{api, catalogue, dom::*, icons, player};
+use crate::{api, catalogue, dom::*, icons, player, search};
 use gloo_timers::callback::Timeout;
 use js_sys::{Function, Reflect};
 use serde_json::{json, Value};
@@ -27,6 +27,7 @@ struct Listing {
     query: String,
     source: String,
     needs_refresh: bool,
+    auto_expanded: bool,
 }
 struct State {
     view: String,
@@ -38,6 +39,8 @@ struct State {
     context: Value,
     history: Vec<Value>,
     favorites: Vec<Value>,
+    recent_searches: Vec<String>,
+    search_kind: String,
     sheet_generation: u64,
     sheet_origin: Option<HtmlElement>,
     search_timer: Option<Timeout>,
@@ -60,6 +63,8 @@ impl Default for State {
             context: Value::Null,
             history: read_records("krmzi_hist"),
             favorites: read_records("krmzi_favs"),
+            recent_searches: read_string_list("zoet_recent_searches"),
+            search_kind: "all".into(),
             sheet_generation: 0,
             sheet_origin: None,
             search_timer: None,
@@ -74,6 +79,38 @@ fn read_records(key: &str) -> Vec<Value> {
     storage(key)
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default()
+}
+fn read_string_list(key: &str) -> Vec<String> {
+    storage(key)
+        .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|s| !s.trim().is_empty())
+        .take(8)
+        .collect()
+}
+fn save_recent_search(raw: &str) {
+    let trimmed = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+    if trimmed.chars().count() < 2 {
+        return;
+    }
+    let trimmed_norm = search::normalize_text(&trimmed);
+    let updated = STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        state
+            .recent_searches
+            .retain(|item| search::normalize_text(item) != trimmed_norm);
+        state.recent_searches.insert(0, trimmed.clone());
+        state.recent_searches.truncate(8);
+        state.recent_searches.clone()
+    });
+    if let Ok(json_str) = serde_json::to_string(&updated) {
+        store("zoet_recent_searches", &json_str);
+    }
+}
+fn clear_recent_searches() {
+    STATE.with(|state| state.borrow_mut().recent_searches.clear());
+    store("zoet_recent_searches", "[]");
 }
 pub fn source_name(source: &str) -> &str {
     if source == "cinemana" {
@@ -326,6 +363,213 @@ fn list_items(list: &Listing) -> Vec<Value> {
         &storage("otium_preferred_source").unwrap_or("cinemana".into()),
     )
 }
+fn local_search_pool(state: &State) -> Vec<Value> {
+    let mut pool = Vec::new();
+    let mut seen_urls = HashSet::new();
+    let allowed = |item: &Value| -> bool {
+        if state.source == "all" {
+            return true;
+        }
+        catalogue::provider(item) == state.source
+            || item["offers"]
+                .as_array()
+                .is_some_and(|arr| arr.iter().any(|o| catalogue::provider(o) == state.source))
+    };
+    let sources = state
+        .series
+        .iter()
+        .chain(state.main.pages.values().flat_map(|p| p.items.iter()))
+        .chain(state.history.iter())
+        .chain(state.favorites.iter());
+    for item in sources {
+        if !allowed(item) {
+            continue;
+        }
+        let u = s(item, "seriesUrl");
+        let url = if u.is_empty() { s(item, "url") } else { u };
+        if url.is_empty() || !seen_urls.insert(url) {
+            continue;
+        }
+        pool.push(item.clone());
+    }
+    pool
+}
+fn ranked_search_items(state: &State, raw_query: &str, allow_local_pre: bool) -> (Vec<Value>, usize, bool) {
+    let parsed = search::parse_query(raw_query);
+    let variants = search::fallback_variants(raw_query, &parsed);
+    let mut items = list_items(&state.search);
+    let mut showing_local = false;
+    if items.is_empty() && allow_local_pre {
+        let local = search::local_matches(&local_search_pool(state), &parsed, &variants, 12);
+        if !local.is_empty() {
+            items = local;
+            showing_local = true;
+        }
+    } else {
+        search::sort_by_relevance(&mut items, &parsed, &variants);
+    }
+    let total_count = items.len();
+    if state.search_kind == "movie" {
+        items.retain(|it| s(it, "type") != "series");
+    } else if state.search_kind == "series" {
+        items.retain(|it| s(it, "type") == "series");
+    }
+    (items, total_count, showing_local)
+}
+fn sync_search_controls_ui(query: &str, kind_filter: &str) {
+    if document().get_element_by_id("clearSearchBtn").is_some() {
+        show("clearSearchBtn", !query.is_empty());
+    }
+    if let Ok(pills) = document().query_selector_all("[data-search-kind]") {
+        for i in 0..pills.length() {
+            if let Some(pill) = pills.item(i).and_then(|n| n.dyn_into::<Element>().ok()) {
+                let active = pill.get_attribute("data-search-kind").as_deref() == Some(kind_filter);
+                let _ = pill.class_list().toggle_with_force("active", active);
+                let _ = pill.set_attribute("aria-pressed", &active.to_string());
+            }
+        }
+    }
+    if let Some(desk_input) = document()
+        .get_element_by_id("desktopSearchInput")
+        .and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
+    {
+        let focused = document().active_element().as_ref() == Some(desk_input.as_ref());
+        if !focused && desk_input.value() != query {
+            desk_input.set_value(query);
+        }
+    }
+}
+fn render_search_discovery() {
+    let (recent, quick) = STATE.with(|state| {
+        let state = state.borrow();
+        let recent = state.recent_searches.clone();
+        let mut quick = Vec::new();
+        let mut seen = HashSet::new();
+        for item in state
+            .favorites
+            .iter()
+            .chain(state.history.iter())
+            .chain(state.series.iter())
+        {
+            let raw_title = s(item, "seriesTitle");
+            let t = if raw_title.is_empty() {
+                catalogue::clean_series_title(&s(item, "title"))
+            } else {
+                catalogue::clean_series_title(&raw_title)
+            };
+            let norm = search::normalize_text(&t);
+            if t.chars().count() >= 2 && seen.insert(norm) {
+                quick.push(t);
+                if quick.len() >= 6 {
+                    break;
+                }
+            }
+        }
+        if quick.is_empty() {
+            let defaults: &[&str] = if state.source == "krmzi" {
+                &["هذا البحر", "الحب", "العائلة", "التجربة"]
+            } else {
+                &["Oppenheimer", "Inception", "Breaking Bad", "Interstellar", "ولاد رزق", "اللعبة"]
+            };
+            for term in defaults {
+                quick.push((*term).to_owned());
+            }
+        }
+        (recent, quick)
+    });
+    if document().get_element_by_id("searchRecentWrap").is_some() {
+        show("searchRecentWrap", !recent.is_empty());
+        let chips = recent
+            .iter()
+            .map(|q| {
+                format!(
+                    "<button class=\"search-chip\" type=\"button\" data-search-query=\"{}\">{}</button>",
+                    esc(q),
+                    esc(q)
+                )
+            })
+            .collect::<String>();
+        html("searchRecentList", &chips);
+    }
+    if document().get_element_by_id("searchQuickList").is_some() {
+        let chips = quick
+            .iter()
+            .map(|q| {
+                format!(
+                    "<button class=\"search-chip\" type=\"button\" data-search-query=\"{}\">{}</button>",
+                    esc(q),
+                    esc(q)
+                )
+            })
+            .collect::<String>();
+        html("searchQuickList", &chips);
+    }
+}
+fn render_search_recovery(
+    query: &str,
+    pending: usize,
+    total_count: usize,
+    filtered_count: usize,
+    kind_filter: &str,
+    source_mode: &str,
+    cinemana_ok: Option<bool>,
+) {
+    if document().get_element_by_id("searchRecoveryCard").is_none() {
+        return;
+    }
+    if query.is_empty() || pending > 0 || filtered_count > 0 {
+        show("searchRecoveryCard", false);
+        html("searchRecoveryCard", "");
+        return;
+    }
+    let markup = if total_count > 0 && kind_filter != "all" {
+        let kind_label = if kind_filter == "movie" {
+            "أفلام"
+        } else {
+            "مسلسلات"
+        };
+        format!(
+            "<h4>لا توجد {} مطابقة لـ «{}»</h4><p>توجد {} نتيجة متوفرة في التصنيفات الأخرى.</p><div class=\"search-chip-row\"><button class=\"search-chip\" type=\"button\" data-search-kind=\"all\">عرض كل النتائج ({})</button></div>",
+            kind_label,
+            esc(query),
+            total_count,
+            total_count
+        )
+    } else {
+        let parsed = search::parse_query(query);
+        let variants = search::fallback_variants(query, &parsed);
+        let mut buttons = String::new();
+        for v in variants.iter().take(3) {
+            buttons.push_str(&format!(
+                "<button class=\"search-chip\" type=\"button\" data-search-query=\"{}\">جرّب: {}</button>",
+                esc(v),
+                esc(v)
+            ));
+        }
+        if source_mode == "krmzi" && cinemana_ok != Some(false) {
+            buttons.push_str(
+                "<button class=\"search-chip\" type=\"button\" data-action=\"search-all-sources\">البحث في قرمزي وسينمانا</button>",
+            );
+        }
+        let hint = if buttons.is_empty() {
+            "تأكد من الإملاء أو جرّب كلمة أقصر أو الاسم الإنجليزي."
+        } else {
+            "يمكنك تجربة أحد المقترحات البديلة أو البحث في كل المصادر:"
+        };
+        format!(
+            "<h4>لا توجد نتائج لـ «{}»</h4><p>{}</p>{}",
+            esc(query),
+            hint,
+            if buttons.is_empty() {
+                String::new()
+            } else {
+                format!("<div class=\"search-chip-row\">{buttons}</div>")
+            }
+        )
+    };
+    html("searchRecoveryCard", &markup);
+    show("searchRecoveryCard", true);
+}
 fn card(item: &Value) -> String {
     let kind = if s(item, "type") == "series" {
         "series"
@@ -464,37 +708,98 @@ fn render_grid(id: &str, items: &[Value]) {
     }
 }
 fn render_listing(search: bool) {
-    let (items, pending, failed, more, view, fallback_to_all) = STATE.with(|state| {
-        let mut state = state.borrow_mut();
-        let source_mode = state.source.clone();
-        let view = state.view.clone();
-        let list = if search { &state.search } else { &state.main };
-        let items = list_items(list);
-        let pending = list.pending;
-        let failed = list
-            .pages
-            .iter()
-            .filter(|(_, p)| p.failed)
-            .map(|(source, _)| source.clone())
-            .collect::<Vec<_>>();
-        let more = list.pages.values().any(|p| p.next.is_some());
-        let cinemana_state = list.pages.get("cinemana").map(|p| (p.failed, p.items.len()));
-        if !search && view == "series" {
-            state.series = items.clone();
-        }
-        let mut fallback_to_all = false;
-        if !search && pending == 0 {
-            if let Some((c_failed, c_len)) = cinemana_state {
-                let available = !c_failed && c_len > 0;
-                state.cinemana_available = Some(available);
-                if !available && view == "series" && source_mode == "cinemana" {
-                    state.source = "all".into();
-                    fallback_to_all = true;
+    let (items, total_count, showing_local, pending, failed, more, view, query, kind_filter, source_mode, cinemana_ok, auto_expand_search, fallback_to_all) =
+        STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            let source_mode = state.source.clone();
+            let view = state.view.clone();
+            let kind_filter = state.search_kind.clone();
+            let cinemana_ok = state.cinemana_available;
+            if search {
+                let query = state.search.query.clone();
+                let pending = state.search.pending;
+                let failed = state
+                    .search
+                    .pages
+                    .iter()
+                    .filter(|(_, p)| p.failed)
+                    .map(|(source, _)| source.clone())
+                    .collect::<Vec<_>>();
+                let more = state.search.pages.values().any(|p| p.next.is_some());
+                let (items, total_count, showing_local) =
+                    ranked_search_items(&state, &query, pending > 0 || state.search_timer.is_some());
+                let auto_expand_search = !query.is_empty()
+                    && pending == 0
+                    && items.len() < 8
+                    && more
+                    && kind_filter != "all"
+                    && !state.search.auto_expanded;
+                if auto_expand_search {
+                    state.search.auto_expanded = true;
                 }
+                (
+                    items,
+                    total_count,
+                    showing_local,
+                    pending,
+                    failed,
+                    more,
+                    view,
+                    query,
+                    kind_filter,
+                    source_mode,
+                    cinemana_ok,
+                    auto_expand_search,
+                    false,
+                )
+            } else {
+                let items = list_items(&state.main);
+                let total_count = items.len();
+                let pending = state.main.pending;
+                let failed = state
+                    .main
+                    .pages
+                    .iter()
+                    .filter(|(_, p)| p.failed)
+                    .map(|(source, _)| source.clone())
+                    .collect::<Vec<_>>();
+                let more = state.main.pages.values().any(|p| p.next.is_some());
+                let cinemana_state = state
+                    .main
+                    .pages
+                    .get("cinemana")
+                    .map(|p| (p.failed, p.items.len()));
+                if view == "series" {
+                    state.series = items.clone();
+                }
+                let mut fallback_to_all = false;
+                if pending == 0 {
+                    if let Some((c_failed, c_len)) = cinemana_state {
+                        let available = !c_failed && c_len > 0;
+                        state.cinemana_available = Some(available);
+                        if !available && view == "series" && source_mode == "cinemana" {
+                            state.source = "all".into();
+                            fallback_to_all = true;
+                        }
+                    }
+                }
+                (
+                    items,
+                    total_count,
+                    false,
+                    pending,
+                    failed,
+                    more,
+                    view,
+                    String::new(),
+                    kind_filter,
+                    source_mode,
+                    cinemana_ok,
+                    false,
+                    fallback_to_all,
+                )
             }
-        }
-        (items, pending, failed, more, view, fallback_to_all)
-    });
+        });
     if fallback_to_all {
         store("zoet_source", "all");
         store("otium_source", "all");
@@ -503,6 +808,30 @@ fn render_listing(search: bool) {
         return;
     }
     sync_cinemana_visibility();
+    if search {
+        sync_search_controls_ui(&query, &kind_filter);
+        if query.is_empty() {
+            show("searchInitialState", true);
+            show("searchGrid", false);
+            show("loadMoreSearchBtn", false);
+            show("searchRecoveryCard", false);
+            text("searchSourceStatus", "");
+            html("searchGrid", "");
+            render_search_discovery();
+            return;
+        }
+        show("searchInitialState", false);
+        show("searchGrid", !items.is_empty() || pending > 0);
+        render_search_recovery(
+            &query,
+            pending,
+            total_count,
+            items.len(),
+            &kind_filter,
+            &source_mode,
+            cinemana_ok,
+        );
+    }
     let grid = if search { "searchGrid" } else { "seriesGrid" };
     if pending == 0 || !items.is_empty() {
         render_grid(grid, &items);
@@ -515,7 +844,7 @@ fn render_listing(search: bool) {
     } else {
         "loadMoreSeriesBtn"
     };
-    show(button, more);
+    show(button, more && (!search || !items.is_empty() || pending > 0));
     let _ = el(button).toggle_attribute_with_force("disabled", pending > 0);
     text(
         button,
@@ -527,7 +856,9 @@ fn render_listing(search: bool) {
             "عرض المزيد"
         },
     );
-    let status = if pending > 0 {
+    let status = if search && showing_local && pending > 0 {
+        "مطابقات محفوظة — جاري البحث في المصادر…".into()
+    } else if pending > 0 {
         "جاري تحميل النتائج…".into()
     } else if !failed.is_empty() {
         format!(
@@ -537,6 +868,13 @@ fn render_listing(search: bool) {
                 .map(|s| source_name(s))
                 .collect::<Vec<_>>()
                 .join(" و")
+        )
+    } else if search && kind_filter != "all" && total_count != items.len() {
+        format!(
+            "{} من أصل {} نتيجة{}",
+            items.len(),
+            total_count,
+            if more { " · المزيد متاح" } else { "" }
         )
     } else {
         format!(
@@ -564,6 +902,10 @@ fn render_listing(search: bool) {
         },
         &status,
     );
+    if auto_expand_search {
+        load_listing(true, false);
+        return;
+    }
     if !search {
         text("seriesCountSub", "");
         let in_catalog = view == "series" || view == "movies";
@@ -603,6 +945,7 @@ fn load_listing(search: bool, reset: bool) {
             list.generation += 1;
             list.pending = 0;
             list.pages.clear();
+            list.auto_expanded = false;
             list.abort = AbortController::new().ok();
             list.source = source.clone();
             list.needs_refresh = false;
@@ -909,15 +1252,28 @@ pub fn search_open() {
         .value()
         .trim()
         .to_string();
-    let refresh = STATE.with(|state| {
+    let (refresh, kind_filter) = STATE.with(|state| {
         let state = state.borrow();
-        state.search.needs_refresh
-            || state.search.source != state.source
-            || state.search.query != query
-            || state.search.pages.is_empty()
+        (
+            state.search.needs_refresh
+                || state.search.source != state.source
+                || state.search.query != query
+                || state.search.pages.is_empty(),
+            state.search_kind.clone(),
+        )
     });
-    if !query.is_empty() && refresh {
+    sync_search_controls_ui(&query, &kind_filter);
+    if query.is_empty() {
+        render_search_discovery();
+        show("searchInitialState", true);
+        show("searchGrid", false);
+        show("searchRecoveryCard", false);
+        show("loadMoreSearchBtn", false);
+        text("searchSourceStatus", "");
+    } else if refresh {
         schedule_search(true);
+    } else {
+        render_listing(true);
     }
 }
 pub fn search_close() {
@@ -956,30 +1312,53 @@ fn schedule_search(immediate: bool) {
         .value()
         .trim()
         .to_string();
-    STATE.with(|state| {
+    let kind_filter = STATE.with(|state| {
         let mut state = state.borrow_mut();
         state.search_timer = None;
         state.search.query = query.clone();
         state.search.needs_refresh = true;
+        state.search.auto_expanded = false;
         if let Some(abort) = state.search.abort.take() {
             abort.abort();
         }
         state.search.generation += 1;
         state.search.pending = 0;
+        if query.is_empty() {
+            state.search.pages.clear();
+        }
+        state.search_kind.clone()
     });
-    show("searchInitialState", query.is_empty());
-    show("searchGrid", !query.is_empty());
-    show("loadMoreSearchBtn", false);
-    text("searchSourceStatus", "");
+    sync_search_controls_ui(&query, &kind_filter);
+    show("searchRecoveryCard", false);
     if query.is_empty() {
+        show("searchInitialState", true);
+        show("searchGrid", false);
+        show("loadMoreSearchBtn", false);
+        text("searchSourceStatus", "");
         html("searchGrid", "");
+        render_search_discovery();
         return;
     }
+    show("searchInitialState", false);
+    show("searchGrid", true);
+    show("loadMoreSearchBtn", false);
     if immediate {
+        save_recent_search(&query);
         load_listing(true, true);
     } else {
+        let (local, _, _) = STATE.with(|state| {
+            let state = state.borrow();
+            ranked_search_items(&state, &query, true)
+        });
+        if !local.is_empty() {
+            render_grid("searchGrid", &local);
+            text("searchSourceStatus", "مطابقات محفوظة — جاري البحث…");
+        } else {
+            text("searchSourceStatus", "");
+            html("searchGrid", "");
+        }
         STATE.with(|state| {
-            state.borrow_mut().search_timer = Some(Timeout::new(260, || load_listing(true, true)))
+            state.borrow_mut().search_timer = Some(Timeout::new(220, || load_listing(true, true)))
         });
     }
 }
@@ -1299,7 +1678,9 @@ fn switch_detail_edition(target_edition: String, title: String) {
                     if STATE.with(|state| state.borrow().sheet_generation) != token {
                         return;
                     }
-                    let rows = results["results"].as_array().cloned().unwrap_or_default();
+                    let mut rows = results["results"].as_array().cloned().unwrap_or_default();
+                    let parsed = search::parse_query(q);
+                    search::sort_by_relevance(&mut rows, &parsed, &[]);
                     if let Some(found) = catalogue::find_counterpart_with_edition(&dummy, &rows, Some(&target_edition)) {
                         let url = if !s(&found, "seriesUrl").is_empty() {
                             s(&found, "seriesUrl")
@@ -1331,7 +1712,7 @@ fn render_detail_episodes() {
         .unwrap_or_default();
     let series = STATE.with(|state| state.borrow().context.clone());
     let episodes = series["episodes"].as_array().cloned().unwrap_or_default();
-    let markup=episodes.iter().filter(|ep|{let ep_season=s(ep,"season");(ep_season==season || (ep_season.is_empty()&&season=="1"))&&(query.is_empty()||format!("{} {}",s(ep,"title"),catalogue::episode_number(ep)).contains(&query))}).enumerate().map(|(index,ep)|{
+    let markup=episodes.iter().filter(|ep|{let ep_season=s(ep,"season");(ep_season==season || (ep_season.is_empty()&&season=="1"))&&search::episode_matches(&s(ep,"title"),&catalogue::episode_number(ep),&query)}).enumerate().map(|(index,ep)|{
         let number=catalogue::episode_number(ep);
         format!("<button class=\"episode-card sheet-episode-btn\" data-action=\"episode\" data-url=\"{}\"><span class=\"episode-number\">{}</span><span class=\"episode-copy\"><strong>{}</strong><small>{}</small></span><span class=\"episode-play\">{}</span></button>",esc(&s(ep,"url")),if number.is_empty(){(index+1).to_string()}else{esc(&number)},esc(&s(ep,"title")),esc(&s(&series,"title")),icons::PLAY)
     }).collect::<String>();
@@ -1354,12 +1735,31 @@ fn click(event: Event) {
         return;
     }
     let Some(button) = target
-        .closest("[data-action],[data-source],[data-pref-source],[data-library],[data-pref-display]")
+        .closest("[data-action],[data-source],[data-pref-source],[data-library],[data-pref-display],[data-search-kind],[data-search-query]")
         .ok()
         .flatten()
     else {
         return;
     };
+    if let Some(kind) = button.get_attribute("data-search-kind") {
+        STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            state.search_kind = kind;
+            state.search.auto_expanded = false;
+        });
+        render_listing(true);
+        return;
+    }
+    if let Some(q) = button.get_attribute("data-search-query") {
+        if let Some(input) = document()
+            .get_element_by_id("overlaySearchInput")
+            .and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
+        {
+            input.set_value(&q);
+        }
+        schedule_search(true);
+        return;
+    }
     if let Some(disp) = button.get_attribute("data-pref-display") {
         store("zoet_display", &disp);
         store("otium_display", &disp);
@@ -1392,9 +1792,36 @@ fn click(event: Event) {
         render_library();
         return;
     }
+    let in_search_grid = target.closest("#searchGrid").ok().flatten().is_some();
     let url = button.get_attribute("data-url").unwrap_or_default();
     match button.get_attribute("data-action").as_deref() {
+        Some("clear-search-history") => {
+            clear_recent_searches();
+            render_search_discovery();
+        }
+        Some("search-all-sources") => {
+            STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                state.source = "all".into();
+                state.search_timer = None;
+                state.search.needs_refresh = true;
+                state.search.generation += 1;
+                state.search.pending = 0;
+                if let Some(abort) = state.search.abort.take() {
+                    abort.abort();
+                }
+            });
+            store("zoet_source", "all");
+            store("otium_source", "all");
+            update_source();
+            load_listing(false, true);
+            schedule_search(true);
+        }
         Some("series") => {
+            if in_search_grid {
+                let q = STATE.with(|s| s.borrow().search.query.clone());
+                save_recent_search(&q);
+            }
             if let Some(source) = button.get_attribute("data-series-source") {
                 store(
                     "otium_preferred_source",
@@ -1414,6 +1841,10 @@ fn click(event: Event) {
             }
         }
         Some("movie") | Some("episode") => {
+            if in_search_grid {
+                let q = STATE.with(|s| s.borrow().search.query.clone());
+                save_recent_search(&q);
+            }
             close_sheet();
             search_close_if_open();
             player::open_episode(url, None);
@@ -2137,7 +2568,7 @@ pub fn init() {
         });
     }
     if document().get_element_by_id("desktopSearchInput").is_some() {
-        on("desktopSearchInput", "input", |_| {
+        let sync_desktop_search = |immediate: bool| {
             if let Some(desk_input) = document()
                 .get_element_by_id("desktopSearchInput")
                 .and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
@@ -2150,38 +2581,85 @@ pub fn init() {
                     overlay_input.set_value(&val);
                 }
                 search_open();
-                schedule_search(false);
+                schedule_search(immediate);
             }
-        });
-        on("desktopSearchInput", "keydown", |event| {
+        };
+        on("desktopSearchInput", "input", move |_| sync_desktop_search(false));
+        on("desktopSearchInput", "keydown", move |event| {
             let event: KeyboardEvent = event.unchecked_into();
             if event.key() == "Enter" {
                 event.prevent_default();
-                if let Some(desk_input) = document()
-                    .get_element_by_id("desktopSearchInput")
-                    .and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
-                {
-                    let val = desk_input.value();
-                    if let Some(overlay_input) = document()
-                        .get_element_by_id("overlaySearchInput")
-                        .and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
-                    {
-                        overlay_input.set_value(&val);
-                    }
-                    search_open();
-                    schedule_search(true);
-                }
+                sync_desktop_search(true);
             }
         });
     }
     on("openSearchBtn", "click", |_| search_open());
     on("closeSearchOverlay", "click", |_| search_close());
+    if document().get_element_by_id("clearSearchBtn").is_some() {
+        on("clearSearchBtn", "click", |_| {
+            for id in ["overlaySearchInput", "desktopSearchInput"] {
+                if let Some(input) = document()
+                    .get_element_by_id(id)
+                    .and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
+                {
+                    input.set_value("");
+                }
+            }
+            schedule_search(false);
+            focus("overlaySearchInput");
+        });
+    }
     on("overlaySearchInput", "input", |_| schedule_search(false));
     on("overlaySearchInput", "keydown", |event| {
         let event: KeyboardEvent = event.unchecked_into();
-        if event.key() == "Enter" {
-            event.prevent_default();
-            schedule_search(true);
+        match event.key().as_str() {
+            "Enter" => {
+                event.prevent_default();
+                schedule_search(true);
+                let is_tv = document()
+                    .document_element()
+                    .and_then(|e| e.get_attribute("data-display"))
+                    .as_deref()
+                    == Some("tv");
+                let wide = window()
+                    .inner_width()
+                    .ok()
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.)
+                    >= 1024.;
+                if !is_tv && !wide {
+                    if let Some(input) = document()
+                        .get_element_by_id("overlaySearchInput")
+                        .and_then(|e| e.dyn_into::<HtmlElement>().ok())
+                    {
+                        let _ = input.blur();
+                    }
+                }
+            }
+            "ArrowDown" => {
+                let is_tv = document()
+                    .document_element()
+                    .and_then(|e| e.get_attribute("data-display"))
+                    .as_deref()
+                    == Some("tv");
+                if is_tv {
+                    event.prevent_default();
+                    for sel in [
+                        "#searchTypeFilters .search-filter-pill.active",
+                        "#searchGrid .series-tile",
+                        "#searchRecentList .search-chip",
+                        "#searchQuickList .search-chip",
+                    ] {
+                        if let Ok(Some(node)) = document().query_selector(sel) {
+                            if let Ok(el) = node.dyn_into::<HtmlElement>() {
+                                let _ = el.focus();
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
         }
     });
     on("loadMoreSeriesBtn", "click", |_| load_listing(false, false));
@@ -2191,7 +2669,7 @@ pub fn init() {
             let scroll_top = canvas.scroll_top();
             let scroll_height = canvas.scroll_height();
             let client_height = canvas.client_height();
-            if scroll_height - scroll_top - client_height < 350 {
+            if scroll_height > client_height + 120 && scroll_height - scroll_top - client_height < 350 {
                 let should_load = STATE.with(|state| {
                     let state = state.borrow();
                     (state.view == "series" || state.view == "movies")
@@ -2210,7 +2688,7 @@ pub fn init() {
                 let scroll_top = area.scroll_top();
                 let scroll_height = area.scroll_height();
                 let client_height = area.client_height();
-                if scroll_height - scroll_top - client_height < 350 {
+                if scroll_height > client_height + 120 && scroll_height - scroll_top - client_height < 350 {
                     let should_load = STATE.with(|state| {
                         let state = state.borrow();
                         state.search.pending == 0

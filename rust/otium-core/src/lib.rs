@@ -337,18 +337,36 @@ impl Engine {
                 json!({"query":"","page":page,"results":[],"hasNext":false,"nextPage":null}),
             );
         }
-        let mut url = Url::parse(&if page == 1 {
-            format!("{ORIGIN}/")
+        let cleaned = clean_search_query(&query);
+        let q_used = if cleaned.is_empty() {
+            query.clone()
         } else {
-            format!("{ORIGIN}/page/{page}/")
-        })
-        .unwrap();
-        url.query_pairs_mut().append_pair("s", &query);
-        let html = self.text(url, 12, krmzi_host).await?;
-        let results = parse_cards(&html, "search");
-        let has_next = has_next_page(&html, page, false);
+            cleaned
+        };
+        let fetch_qesen = |term: &str| {
+            let mut url = Url::parse(&if page == 1 {
+                format!("{ORIGIN}/")
+            } else {
+                format!("{ORIGIN}/page/{page}/")
+            })
+            .unwrap();
+            url.query_pairs_mut().append_pair("s", term);
+            url
+        };
+        let html = self.text(fetch_qesen(&q_used), 12, krmzi_host).await?;
+        let mut results = parse_cards(&html, "search");
+        let mut has_next = has_next_page(&html, page, false);
+        if page == 1 && results.is_empty() {
+            let folded = fold_arabic_hamza(&q_used);
+            if folded != q_used && !folded.is_empty() {
+                if let Ok(fallback_html) = self.text(fetch_qesen(&folded), 12, krmzi_host).await {
+                    results = parse_cards(&fallback_html, "search");
+                    has_next = has_next_page(&fallback_html, page, false);
+                }
+            }
+        }
         Ok(
-            json!({"query":query,"page":page,"results":results,"hasNext":has_next,"nextPage":if has_next{Some(page+1)}else{None}}),
+            json!({"query":query,"cleanedQuery":q_used,"page":page,"results":results,"hasNext":has_next,"nextPage":if has_next{Some(page+1)}else{None}}),
         )
     }
     async fn series_detail(&self, url: &str) -> Result<Value> {
@@ -638,6 +656,34 @@ pub fn safe_media(raw: &str) -> Option<Url> {
 pub fn safe_subtitle(raw: &str) -> Option<Url> {
     Url::parse(raw).ok().filter(subtitle_host)
 }
+fn fold_arabic_hamza(text: &str) -> String {
+    text.chars()
+        .map(|ch| match ch {
+            'أ' | 'إ' | 'آ' | 'ٱ' => 'ا',
+            'ى' => 'ي',
+            _ => ch,
+        })
+        .collect()
+}
+
+fn clean_search_query(raw: &str) -> String {
+    let filler = ["فيلم", "فلم", "مسلسل", "انمي", "أنمي", "movie", "film", "series", "show"];
+    let words: Vec<&str> = raw.split_whitespace().collect();
+    let mut start = 0;
+    let mut end = words.len();
+    while start < end && filler.contains(&words[start].to_ascii_lowercase().as_str()) {
+        start += 1;
+    }
+    while end > start && filler.contains(&words[end - 1].to_ascii_lowercase().as_str()) {
+        end -= 1;
+    }
+    if start < end {
+        words[start..end].join(" ")
+    } else {
+        words.join(" ")
+    }
+}
+
 pub fn valid_cinemana_path(path: &str) -> bool {
     let allowed = compiled(r"^(latestSeries|latestMovies)/level/0/itemsPerPage/24/page/[0-9]{1,4}/$").is_match(path)
         || compiled(r"^(allVideoInfo|videoSeason|transcoddedFiles)/id/[0-9]+$").is_match(path)

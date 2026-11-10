@@ -470,7 +470,7 @@ pub fn merge(items: &[Value], preferred: &str) -> Vec<Value> {
                 .find(|offer| provider(offer) == preferred)
                 .or_else(|| group.offers.first())?
                 .clone();
-            for key in ["year", "thumbnail", "artwork", "poster", "story"] {
+            for key in ["year", "rating", "thumbnail", "artwork", "poster", "story"] {
                 if field(&primary, key).is_empty() {
                     if let Some(value) = group
                         .offers
@@ -481,6 +481,25 @@ pub fn merge(items: &[Value], preferred: &str) -> Vec<Value> {
                         primary[key] = value.clone();
                     }
                 }
+            }
+            let mut merged_aliases: Vec<String> = Vec::new();
+            for offer in &group.offers {
+                for key in ["title", "ar_title", "en_title"] {
+                    let v = field(offer, key);
+                    if !v.is_empty() && !merged_aliases.contains(&v) {
+                        merged_aliases.push(v);
+                    }
+                }
+                if let Some(arr) = offer["aliases"].as_array() {
+                    for alias in arr.iter().filter_map(Value::as_str).map(str::trim) {
+                        if !alias.is_empty() && !merged_aliases.iter().any(|e| e == alias) {
+                            merged_aliases.push(alias.to_owned());
+                        }
+                    }
+                }
+            }
+            if !merged_aliases.is_empty() {
+                primary["aliases"] = json!(merged_aliases);
             }
             let mut sources: Vec<&str> = Vec::new();
             let mut editions: Vec<&str> = Vec::new();

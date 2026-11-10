@@ -1,7 +1,7 @@
 /* Browser platform cache. Catalogue and playback logic run in Rust/WASM. */
 'use strict';
-const CACHE='zoet-shell-2.9.5';
-const SHELL=['./','./index.html','./styles.css?v=2.9.5','./manifest.json','./wasm/otium_ui.js?v=2.9.5','./wasm/otium_ui_bg.wasm?v=2.9.5','./vendor/hls/hls.min.js','./fonts/tajawal.css','./icons/icon-192.png','./icons/icon-512.png',...Array.from({length:10},(_,i)=>`./fonts/tajawal-${i+1}.woff2`)];
+const CACHE='zoet-shell-2.9.6';
+const SHELL=['./','./index.html','./styles.css?v=2.9.6','./manifest.json','./wasm/otium_ui.js?v=2.9.6','./wasm/otium_ui_bg.wasm?v=2.9.6','./vendor/hls/hls.min.js','./fonts/tajawal.css','./icons/icon-192.png','./icons/icon-512.png',...Array.from({length:10},(_,i)=>`./fonts/tajawal-${i+1}.woff2`)];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil((async()=>{
   const names=await caches.keys();

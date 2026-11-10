@@ -37,7 +37,11 @@ const server = http.createServer(async(req,res)=>{
     switch(url.pathname) {
       case '/api/series': data={page,series:page===1?krSeries.slice(0,2):krSeries.slice(2),hasNext:true,nextPage:page+1};break;
       case '/api/episodes': data={page,episodes,hasNext:false,nextPage:null};break;
-      case '/api/search': data={page,results:page===1?[series]:[krSeries[2]],hasNext:page===1,nextPage:page===1?2:null};break;
+      case '/api/search': {
+        const q=(url.searchParams.get('q')||'').trim();
+        data=q==='لايوجد_اطلاقا'?{page,results:[],hasNext:false,nextPage:null}:{page,results:page===1?[series]:[krSeries[2]],hasNext:page===1,nextPage:page===1?2:null};
+        break;
+      }
       case '/api/series/detail': data={...series,url:url.searchParams.get('url'),poster:artwork,story:'قصة قصيرة للاختبار',episodes};break;
       case '/api/episode/detail': {
         if(delayEpisode)await new Promise(resolve=>setTimeout(resolve,delayEpisode));
@@ -52,7 +56,19 @@ const server = http.createServer(async(req,res)=>{
         const route=url.searchParams.get('path');
         if(route.startsWith('latestSeries/')) data=route.includes('/page/0/')?cinemaSeries:[cinema(950,'مسلسل إضافي من سينمانا')];
         else if(route.startsWith('latestMovies/'))data=[cinema(800,'فيلم سينمانا الأول','1'),cinema(801,'فيلم سينمانا الثاني','1')];
-        else if(route.startsWith('video/V/'))data=route.includes('/pageNumber/0/')?cinemaSeries.slice(0,12):[cinema(960,'نتيجة إضافية')];
+        else if(route.startsWith('video/V/')){
+          const word=route.split('/video_title_search/')[1]?.split('/')[0]||'';
+          const decoded=Buffer.from(word,'base64url').toString('utf8');
+          if(decoded==='The Batman'){
+            data=[cinema(881,'Batman','1'),{...cinema(880,'The Batman','1'),year:'2022',stars:'7.8'}];
+          }else if(decoded==='اوبنهايمر'||decoded==='لايوجد_اطلاقا'){
+            data=[];
+          }else if(decoded==='Oppenheimer'){
+            data=[{...cinema(882,'Oppenheimer','1'),year:'2023',stars:'8.4'}];
+          }else{
+            data=route.includes('/pageNumber/0/')?cinemaSeries.slice(0,12):[cinema(960,'نتيجة إضافية')];
+          }
+        }
         else if(route.startsWith('videoSeason/'))data=[cinema(700),{...cinema(701),episodeNummer:'2',rootSeries:'700'},{...cinema(702),season:'2',rootSeries:'700'}];
         else if(route.startsWith('allVideoInfo/')){
           const id=route.split('/').at(-1);data=id==='800'||id==='801'?cinema(id,`فيلم سينمانا ${id}`,'1'):{...cinema(id),episodeNummer:id==='701'?'2':'1',season:id==='702'?'2':'1',rootSeries:id==='700'?'0':'700'};
@@ -225,7 +241,30 @@ async function run(){
       const{context,page}=await open('all');delayCinemana=450;await page.locator('#openSearchBtn').click();await page.locator('#overlaySearchInput').fill('التجربة');await page.waitForTimeout(300);await page.keyboard.press('Escape');await page.waitForTimeout(500);
       const before=requests.length;await page.locator('#openSearchBtn').click();await page.waitForFunction(()=>document.querySelectorAll('#searchGrid .series-tile').length===12);assert(requests.slice(before).some(request=>request.startsWith('/api/cinemana?')),'Reopening an aborted query retries its provider request');
       await page.keyboard.press('Escape');delayCinemana=0;await page.locator('[data-source="krmzi"]').click();await page.locator('#openSearchBtn').click();await page.waitForFunction(()=>{const g=document.getElementById('searchGrid');return g&&g.querySelectorAll('.series-tile').length>=1&&g.textContent.includes('التجربة')&&!g.textContent.includes('حكاية سينمانا');});assert(!(await page.locator('#searchGrid').textContent()).includes('حكاية سينمانا'),'Changing source invalidates previous search results');
-      await context.close();console.log('PASS Rust search: reopen pending query and source-change invalidation');
+      // Search Overhaul: ranking, Arabic->English fallback, kind filters, clear/recent, recovery card
+      await page.locator('#overlaySearchInput').fill('لايوجد_اطلاقا');
+      await page.locator('#overlaySearchInput').press('Enter');
+      await page.locator('#searchRecoveryCard [data-action="search-all-sources"]').waitFor();
+      await page.locator('#searchRecoveryCard [data-action="search-all-sources"]').click();
+      await page.waitForFunction(()=>document.querySelector('[data-source="all"].active'));
+      await page.locator('#overlaySearchInput').fill('The Batman');
+      await page.locator('#overlaySearchInput').press('Enter');
+      await page.waitForFunction(()=>document.querySelector('#searchGrid .series-tile[data-url="cinemana:880"]'));
+      assert.equal(await page.locator('#searchGrid .series-tile').first().getAttribute('data-url'),'cinemana:880','Exact movie title ranks first even above Krmzi series and older titles');
+      await page.locator('#overlaySearchInput').fill('اوبنهايمر');
+      await page.locator('#overlaySearchInput').press('Enter');
+      await page.waitForFunction(()=>document.querySelector('#searchGrid .series-tile[data-url="cinemana:882"]'));
+      assert.equal(await page.locator('#searchGrid .series-tile').first().getAttribute('data-url'),'cinemana:882','Arabic transliteration falls back transparently to English title on Cinemana');
+      await page.locator('[data-search-kind="movie"]').click();
+      await page.waitForFunction(()=>Array.from(document.querySelectorAll('#searchGrid .series-tile')).every(el=>el.getAttribute('data-action')==='movie'||el.getAttribute('data-action')==='episode'));
+      assert(!(await page.locator('#searchGrid').textContent()).includes('مسلسل التجربة'),'Movies filter removes Krmzi series noise');
+      await page.locator('[data-search-kind="all"]').click();
+      await page.locator('#clearSearchBtn').click();
+      await page.waitForFunction(()=>!document.getElementById('searchRecentWrap').classList.contains('hidden'));
+      assert((await page.locator('#searchRecentList').textContent()).includes('اوبنهايمر'),'Submitted search saves into recent searches');
+      await page.locator('#clearRecentSearchesBtn').click();
+      await page.waitForFunction(()=>document.getElementById('searchRecentWrap').classList.contains('hidden'));
+      await context.close();console.log('PASS Rust search: ranking, Arabic fallback, type filters, recent history, recovery, reopen & source invalidation');
     }
     {
       const{context,page}=await open('krmzi',{width:390,height:844},true);

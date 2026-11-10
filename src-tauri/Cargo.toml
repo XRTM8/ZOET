@@ -1,6 +1,6 @@
 [package]
 name = "zoet-desktop"
-version = "2.9.5"
+version = "2.9.6"
 description = "ZOET Desktop Native App"
 authors = ["Otium"]
 edition = "2021"
