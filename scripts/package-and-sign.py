@@ -8,8 +8,12 @@ from cryptography.hazmat.primitives.serialization import pkcs12, Encoding, Publi
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
 
+VERSION_NAME = '2.9.1'
+VERSION_CODE = 27
+
 def main():
-    print("=== ZOET v2.8.0 APK Packager & Signer (Strict Android Alignment & v2 Spec) ===")
+    print(f"=== ZOET v{VERSION_NAME} APK Packager & Signer (Strict Android Alignment & v2 Spec) ===")
+    assert len(VERSION_NAME.encode('utf-16le')) == 10, "VERSION_NAME must stay 5 ASCII chars (10 bytes UTF-16LE)"
     
     # Priority for template APK: release-output/app-release-2.7.2.apk, then fallback
     template_apk_path = 'release-output/app-release-2.7.2.apk'
@@ -20,6 +24,7 @@ def main():
     
     out_apk_path = 'release-output/app-release.apk'
     out_play_path = 'release-output/otium-play.apk'
+    out_ver_path = f'release-output/zoet-{VERSION_NAME}.apk'
     base_apk_path = 'android/app/build/outputs/apk/release/app-release.apk'
     os.makedirs('release-output', exist_ok=True)
     os.makedirs(os.path.dirname(base_apk_path), exist_ok=True)
@@ -107,10 +112,9 @@ def main():
             # Patch manifest: uncompress original, update vname and vcode, recompress
             orig_manifest = zlib.decompress(e['raw_data'], -15) if cm == 8 else e['raw_data']
             m = bytearray(orig_manifest)
-            # Patch versionName 2.8.0
-            m[1264:1274] = '2.8.0'.encode('utf-16le')
-            # Patch versionCode 26
-            struct.pack_into('<I', m, 4180, 26)
+            # Patch versionName and versionCode
+            m[1264:1274] = VERSION_NAME.encode('utf-16le')
+            struct.pack_into('<I', m, 4180, VERSION_CODE)
             uncompressed = bytes(m)
             u_size = len(uncompressed)
             crc = zlib.crc32(uncompressed) & 0xffffffff
@@ -331,16 +335,14 @@ def main():
 
     final_apk = sec1 + apk_signing_block + sec2 + bytes(new_sec3)
 
-    with open(out_apk_path, 'wb') as f:
-        f.write(final_apk)
-    with open(out_play_path, 'wb') as f:
-        f.write(final_apk)
-    with open(base_apk_path, 'wb') as f:
-        f.write(final_apk)
+    for p in [out_apk_path, out_play_path, out_ver_path, base_apk_path]:
+        with open(p, 'wb') as f:
+            f.write(final_apk)
 
     print(f"\nSaved signed APK ({len(final_apk)} bytes) to:")
     print(f" - {out_apk_path}")
     print(f" - {out_play_path}")
+    print(f" - {out_ver_path}")
     print(f" - {base_apk_path}")
 
     # ================= STRICT INTEGRITY VERIFICATIONS =================
@@ -406,10 +408,25 @@ def main():
 
     expected_sha = '2c6d74a5251577fcdfd8a9df651d52fb2641ff4ef1be6686c8266abed0a0cbf3'
     assert pkg == 'com.krmzi.app', f"Unexpected package {pkg}"
-    assert vcode == '26', f"Unexpected versionCode {vcode}"
-    assert vname == '2.8.0', f"Unexpected versionName {vname}"
+    assert vcode == str(VERSION_CODE), f"Unexpected versionCode {vcode}"
+    assert vname == VERSION_NAME, f"Unexpected versionName {vname}"
     assert signed_v2 == True, "APK is not signed with v2"
     assert cert_sha == expected_sha, f"Cert SHA mismatch: {cert_sha} != {expected_sha}"
+
+    import zipfile
+    with zipfile.ZipFile(out_apk_path, 'r') as zf:
+        packaged_wasm = zf.read('assets/public/wasm/otium_ui_bg.wasm')
+        with open(os.path.join(assets_root, 'wasm', 'otium_ui_bg.wasm'), 'rb') as wf:
+            disk_wasm = wf.read()
+        assert packaged_wasm == disk_wasm, "Packaged WASM does not match synced disk WASM!"
+        assert any(n.startswith('lib/arm64-v8a/libotium_core.so') for n in zf.namelist())
+        assert any(n.startswith('lib/armeabi-v7a/libotium_core.so') for n in zf.namelist())
+        assert any(n.startswith('lib/x86/libotium_core.so') for n in zf.namelist())
+        assert any(n.startswith('lib/x86_64/libotium_core.so') for n in zf.namelist())
+
+    apk_digest = hashlib.sha256(final_apk).hexdigest()
+    print(f"   Packaged WASM & 4 ABIs verified!")
+    print(f"   APK SHA256: {apk_digest}")
     
     print("\n=======================================================")
     print("ALL VERIFICATIONS PASSED 100%! APK IS 100% HEALTHY & COMPATIBLE!")
