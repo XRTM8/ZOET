@@ -43,6 +43,7 @@ struct State {
     search_timer: Option<Timeout>,
     history_saved: f64,
     library_mode: String,
+    cinemana_available: Option<bool>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -64,6 +65,7 @@ impl Default for State {
             search_timer: None,
             history_saved: 0.,
             library_mode: "hist".into(),
+            cinemana_available: None,
         }
     }
 }
@@ -403,8 +405,10 @@ fn render_grid(id: &str, items: &[Value]) {
     }
 }
 fn render_listing(search: bool) {
-    let (items, pending, failed, more, view) = STATE.with(|state| {
+    let (items, pending, failed, more, view, fallback_to_all) = STATE.with(|state| {
         let mut state = state.borrow_mut();
+        let source_mode = state.source.clone();
+        let view = state.view.clone();
         let list = if search { &state.search } else { &state.main };
         let items = list_items(list);
         let pending = list.pending;
@@ -415,11 +419,31 @@ fn render_listing(search: bool) {
             .map(|(source, _)| source.clone())
             .collect::<Vec<_>>();
         let more = list.pages.values().any(|p| p.next.is_some());
-        if !search && state.view == "series" {
+        let cinemana_state = list.pages.get("cinemana").map(|p| (p.failed, p.items.len()));
+        if !search && view == "series" {
             state.series = items.clone();
         }
-        (items, pending, failed, more, state.view.clone())
+        let mut fallback_to_all = false;
+        if !search && pending == 0 {
+            if let Some((c_failed, c_len)) = cinemana_state {
+                let available = !c_failed && c_len > 0;
+                state.cinemana_available = Some(available);
+                if !available && view == "series" && source_mode == "cinemana" {
+                    state.source = "all".into();
+                    fallback_to_all = true;
+                }
+            }
+        }
+        (items, pending, failed, more, view, fallback_to_all)
     });
+    if fallback_to_all {
+        store("zoet_source", "all");
+        store("otium_source", "all");
+        update_source();
+        load_listing(false, true);
+        return;
+    }
+    sync_cinemana_visibility();
     let grid = if search { "searchGrid" } else { "seriesGrid" };
     if pending == 0 || !items.is_empty() {
         render_grid(grid, &items);
@@ -771,7 +795,6 @@ fn render_library() {
         };
         (records, mode)
     });
-    render_grid("libraryGrid", &records);
     if records.is_empty() {
         let (msg, sub) = if mode == "favs" {
             (
@@ -791,6 +814,8 @@ fn render_library() {
                 icons::EMPTY_BOOKMARK
             ),
         );
+    } else {
+        render_grid("libraryGrid", &records);
     }
     if document().get_element_by_id("clearHistoryBtn").is_some() {
         show("clearHistoryBtn", mode == "hist" && !records.is_empty());
@@ -1360,6 +1385,16 @@ fn search_close_if_open() {
         search_close();
     }
 }
+fn sync_cinemana_visibility() {
+    let hidden = STATE.with(|state| state.borrow().cinemana_available == Some(false));
+    if let Ok(buttons) = document().query_selector_all("[data-source=\"cinemana\"],[data-pref-source=\"cinemana\"]") {
+        for i in 0..buttons.length() {
+            if let Some(button) = buttons.item(i).and_then(|n| n.dyn_into::<Element>().ok()) {
+                let _ = button.class_list().toggle_with_force("hidden", hidden);
+            }
+        }
+    }
+}
 fn update_source() {
     let source = STATE.with(|state| state.borrow().source.clone());
     if let Ok(buttons) = document().query_selector_all("[data-source],[data-pref-source]") {
@@ -1374,6 +1409,7 @@ fn update_source() {
             }
         }
     }
+    sync_cinemana_visibility();
 }
 fn open_backup_sheet() {
     open_sheet(
@@ -1826,7 +1862,8 @@ pub fn init() {
             if scroll_height - scroll_top - client_height < 350 {
                 let should_load = STATE.with(|state| {
                     let state = state.borrow();
-                    state.main.pending == 0
+                    (state.view == "series" || state.view == "movies")
+                        && state.main.pending == 0
                         && state.main.pages.values().any(|p| p.next.is_some() && !p.failed)
                 });
                 if should_load {
