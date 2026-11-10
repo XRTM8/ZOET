@@ -734,6 +734,11 @@ fn load_listing(search: bool, reset: bool) {
 }
 pub fn set_view(view: &str) {
     let in_catalog = view == "series" || view == "movies";
+    let is_tv = document()
+        .document_element()
+        .and_then(|e| e.get_attribute("data-display"))
+        .as_deref()
+        == Some("tv");
     STATE.with(|state| {
         let mut state = state.borrow_mut();
         state.view = view.into();
@@ -748,7 +753,7 @@ pub fn set_view(view: &str) {
     show("seriesSection", in_catalog);
     show("sourceSwitcher", in_catalog);
     if document().get_element_by_id("catalogueTabs").is_some() {
-        show("catalogueTabs", in_catalog);
+        show("catalogueTabs", in_catalog || is_tv);
     }
     if !in_catalog {
         show("offlineState", false);
@@ -782,6 +787,8 @@ pub fn set_view(view: &str) {
         ("navCatalogBtn", in_catalog),
         ("openLibraryBtn", view == "library"),
         ("openSettingsBtn", view == "settings"),
+        ("tvLibraryBtn", view == "library"),
+        ("tvSettingsBtn", view == "settings"),
     ] {
         if let Some(btn) = document().get_element_by_id(id) {
             let _ = btn.class_list().toggle_with_force("active", active);
@@ -925,7 +932,16 @@ pub fn search_close() {
         }
     });
     show("searchOverlay", false);
-    focus("openSearchBtn");
+    let is_tv = document()
+        .document_element()
+        .and_then(|e| e.get_attribute("data-display"))
+        .as_deref()
+        == Some("tv");
+    if is_tv && document().get_element_by_id("tvSearchBtn").is_some() {
+        focus("tvSearchBtn");
+    } else {
+        focus("openSearchBtn");
+    }
 }
 pub fn is_search_open() -> bool {
     !el("searchOverlay").class_list().contains("hidden")
@@ -1338,12 +1354,18 @@ fn click(event: Event) {
         return;
     }
     let Some(button) = target
-        .closest("[data-action],[data-source],[data-pref-source],[data-library]")
+        .closest("[data-action],[data-source],[data-pref-source],[data-library],[data-pref-display]")
         .ok()
         .flatten()
     else {
         return;
     };
+    if let Some(disp) = button.get_attribute("data-pref-display") {
+        store("zoet_display", &disp);
+        store("otium_display", &disp);
+        apply_display();
+        return;
+    }
     if let Some(source) = button.get_attribute("data-source").or_else(|| button.get_attribute("data-pref-source")) {
         STATE.with(|state| {
             let mut state = state.borrow_mut();
@@ -1536,40 +1558,60 @@ fn open_backup_sheet() {
 }
 fn apply_display() {
     let saved_display = storage("zoet_display").or_else(|| storage("otium_display"));
-    let tv = saved_display.as_deref() == Some("tv")
-        || native_bool("isTelevision")
-        || window()
-            .navigator()
-            .user_agent()
-            .unwrap_or_default()
-            .contains("Android TV");
+    let pref = saved_display.as_deref().unwrap_or("auto");
+    let auto_tv = pref == "auto"
+        && (native_bool("isTelevision")
+            || window()
+                .navigator()
+                .user_agent()
+                .unwrap_or_default()
+                .contains("Android TV"));
+    let tv = pref == "tv" || auto_tv;
     let width = window()
         .inner_width()
         .ok()
         .and_then(|v| v.as_f64())
         .unwrap_or(390.);
-    let desktop = saved_display.as_deref() == Some("desktop");
-    let _ = document().document_element().unwrap().set_attribute(
-        "data-display",
-        if tv {
-            "tv"
-        } else if desktop || width >= 1024. {
-            "desktop"
-        } else {
-            "mobile"
-        },
-    );
+    let desktop = pref == "desktop";
+    let mode_str = if tv {
+        "tv"
+    } else if desktop || width >= 1024. {
+        "desktop"
+    } else {
+        "mobile"
+    };
+    let _ = document()
+        .document_element()
+        .unwrap()
+        .set_attribute("data-display", mode_str);
     if document().get_element_by_id("desktopWindowControls").is_some() {
         let in_tauri = Reflect::get(window().as_ref(), &"__TAURI__".into())
             .ok()
             .is_some_and(|v| !v.is_undefined() && !v.is_null());
         show("desktopWindowControls", in_tauri);
     }
+    let active_pref = saved_display.unwrap_or("auto".into());
     if let Some(select) = document()
         .get_element_by_id("displayModeSelect")
         .and_then(|element| element.dyn_into::<web_sys::HtmlSelectElement>().ok())
     {
-        select.set_value(&saved_display.unwrap_or("auto".into()));
+        select.set_value(&active_pref);
+    }
+    if let Ok(pills) = document().query_selector_all("[data-pref-display]") {
+        for i in 0..pills.length() {
+            if let Some(pill) = pills.item(i).and_then(|n| n.dyn_into::<Element>().ok()) {
+                let active = pill.get_attribute("data-pref-display").as_deref() == Some(&active_pref);
+                let _ = pill.class_list().toggle_with_force("active", active);
+                let _ = pill.set_attribute("aria-pressed", &active.to_string());
+            }
+        }
+    }
+    if document().get_element_by_id("catalogueTabs").is_some() {
+        let view = current_view();
+        show(
+            "catalogueTabs",
+            tv || view == "series" || view == "movies",
+        );
     }
 }
 fn native_bool(method: &str) -> bool {
@@ -1687,6 +1729,161 @@ fn remote_focus(event: &KeyboardEvent) {
     event.prevent_default();
     remote_focus_key(&event.key());
 }
+fn tv_scroll_into_view(target: &HtmlElement) {
+    let Ok(Some(scroller)) =
+        target.closest("#seriesEpisodeList, .sheet-content, #searchScrollArea, #contentCanvas")
+    else {
+        return;
+    };
+    let tr = target.get_bounding_client_rect();
+    let sr = scroller.get_bounding_client_rect();
+    let pad = 64.0;
+    let cur = scroller.scroll_top() as f64;
+    if tr.top() < sr.top() + pad {
+        scroller.set_scroll_top((cur - (sr.top() + pad - tr.top())).max(0.) as i32);
+    } else if tr.bottom() > sr.bottom() - pad {
+        scroller.set_scroll_top((cur + (tr.bottom() - (sr.bottom() - pad))).max(0.) as i32);
+    }
+}
+fn grid_columns(grid: &Element) -> usize {
+    if let Ok(Some(style)) = window().get_computed_style(grid) {
+        if let Ok(cols) = style.get_property_value("grid-template-columns") {
+            let count = cols.split_whitespace().filter(|s| !s.is_empty()).count();
+            if count > 0 {
+                return count;
+            }
+        }
+    }
+    let children = grid.children();
+    let total = (children.length() as usize).min(10);
+    if total == 0 {
+        return 1;
+    }
+    let y0 = children.item(0).unwrap().get_bounding_client_rect().top();
+    let mut cols = 1;
+    for i in 1..total {
+        if (children.item(i as u32).unwrap().get_bounding_client_rect().top() - y0).abs() < 16.0 {
+            cols += 1;
+        } else {
+            break;
+        }
+    }
+    cols
+}
+fn grid_navigate(grid: &Element, current: &Element, key: &str) -> bool {
+    let children = grid.children();
+    let len = children.length() as usize;
+    if len == 0 {
+        return false;
+    }
+    let mut idx = 0usize;
+    let mut prev = current.previous_element_sibling();
+    while let Some(p) = prev {
+        idx += 1;
+        prev = p.previous_element_sibling();
+    }
+    if idx >= len {
+        return false;
+    }
+    let cols = grid_columns(grid).max(1);
+    let is_rtl = document()
+        .document_element()
+        .and_then(|e| e.get_attribute("dir"))
+        .as_deref()
+        != Some("ltr");
+    let target_idx: Option<usize> = match key {
+        "ArrowLeft" | "ArrowRight" => {
+            let step_next = if is_rtl {
+                key == "ArrowLeft"
+            } else {
+                key == "ArrowRight"
+            };
+            if step_next {
+                if idx + 1 < len && (idx + 1) % cols != 0 {
+                    Some(idx + 1)
+                } else {
+                    return true;
+                }
+            } else if idx % cols != 0 {
+                Some(idx - 1)
+            } else {
+                return true;
+            }
+        }
+        "ArrowDown" => {
+            if idx + cols < len {
+                Some(idx + cols)
+            } else if idx / cols < (len - 1) / cols {
+                Some(len - 1)
+            } else {
+                None
+            }
+        }
+        "ArrowUp" => {
+            if idx >= cols {
+                Some(idx - cols)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    };
+    let Some(next_i) = target_idx else {
+        return false;
+    };
+    if let Some(next_el) = children
+        .item(next_i as u32)
+        .and_then(|e| e.dyn_into::<HtmlElement>().ok())
+    {
+        let _ = next_el.focus();
+        if next_i < cols && matches!(grid.id().as_str(), "seriesGrid" | "moviesGrid") {
+            if let Ok(Some(canvas)) = grid.closest("#contentCanvas") {
+                canvas.set_scroll_top(0);
+                return true;
+            }
+        }
+        tv_scroll_into_view(&next_el);
+        return true;
+    }
+    false
+}
+fn list_navigate(current: &Element, key: &str) -> bool {
+    let sibling = match key {
+        "ArrowDown" => current.next_element_sibling(),
+        "ArrowUp" => current.previous_element_sibling(),
+        _ => return false,
+    };
+    if let Some(next_el) = sibling.and_then(|e| e.dyn_into::<HtmlElement>().ok()) {
+        let _ = next_el.focus();
+        tv_scroll_into_view(&next_el);
+        return true;
+    }
+    key == "ArrowDown"
+}
+fn is_grid_edge_tile(node: &Element) -> bool {
+    if !node.class_list().contains("series-tile") {
+        return true;
+    }
+    let mut from_start = 0;
+    let mut cur = node.previous_element_sibling();
+    while from_start < 6 {
+        let Some(p) = cur else {
+            return true;
+        };
+        from_start += 1;
+        cur = p.previous_element_sibling();
+    }
+    let mut from_end = 0;
+    let mut cur_n = node.next_element_sibling();
+    while from_end < 6 {
+        let Some(n) = cur_n else {
+            return true;
+        };
+        from_end += 1;
+        cur_n = n.next_element_sibling();
+    }
+    false
+}
 pub fn remote_focus_key(key: &str) {
     let is_tv = document()
         .document_element()
@@ -1700,27 +1897,38 @@ pub fn remote_focus_key(key: &str) {
     } else {
         el("appFrame")
     };
+    let current = document().active_element();
+    let current = match current {
+        Some(ref elem) if elem.tag_name() != "BODY" && elem.tag_name() != "HTML" => Some(elem),
+        _ => None,
+    };
+    if let Some(curr) = current {
+        if let Ok(Some(grid)) = curr.closest(".media-grid") {
+            if grid_navigate(&grid, curr, key) {
+                return;
+            }
+        }
+        if curr.class_list().contains("episode-card") && list_navigate(curr, key) {
+            return;
+        }
+    }
     let Ok(nodes) = root.query_selector_all("button,input,select,textarea,a[href],[tabindex]:not([tabindex='-1'])") else {
         return;
     };
     let nodes = (0..nodes.length())
         .filter_map(|i| nodes.item(i)?.dyn_into::<HtmlElement>().ok())
         .filter(|n| {
-            n.offset_height() > 0
+            is_grid_edge_tile(n.as_ref())
+                && n.offset_height() > 0
                 && !n.has_attribute("disabled")
                 && n.closest(".hidden").ok().flatten().is_none()
                 && !(is_tv && n.id() == "sheetEpisodeSearch")
         })
         .collect::<Vec<_>>();
-    let current = document().active_element();
-    let current = match current {
-        Some(ref el) if el.tag_name() != "BODY" && el.tag_name() != "HTML" => Some(el),
-        _ => None,
-    };
     let Some(current) = current else {
         if let Some(first) = nodes.first() {
             let _ = first.focus();
-            first.scroll_into_view_with_bool(key == "ArrowUp");
+            tv_scroll_into_view(first);
         }
         return;
     };
@@ -1750,7 +1958,7 @@ pub fn remote_focus_key(key: &str) {
     ranked.sort_by(|a, b| a.0.total_cmp(&b.0));
     if let Some((_, next)) = ranked.first() {
         let _ = next.focus();
-        next.scroll_into_view_with_bool(key == "ArrowUp");
+        tv_scroll_into_view(next);
     }
 }
 fn parse_version(v: &str) -> Vec<u32> {
@@ -1856,6 +2064,11 @@ pub fn init() {
     }
     if document().get_element_by_id("openSettingsBtn").is_some() {
         on("openSettingsBtn", "click", |_| set_view("settings"));
+    }
+    if document().get_element_by_id("tvLibraryBtn").is_some() {
+        on("tvLibraryBtn", "click", |_| set_view("library"));
+        on("tvSettingsBtn", "click", |_| set_view("settings"));
+        on("tvSearchBtn", "click", |_| search_open());
     }
     if document().get_element_by_id("deskTabSeries").is_some() {
         on("deskTabSeries", "click", |_| set_view("series"));

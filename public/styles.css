@@ -1239,709 +1239,7 @@ video::cue { font-family: 'Tajawal', sans-serif; font-size: 90%; background: var
 .display-preference select { min-height:44px;min-width:100px;background:var(--bg-surface);border:1px solid var(--line-hover);border-radius:5px;color:var(--text-main);font:inherit;padding:8px }
 .episodes-menu-button { display:none }
 .app-frame:fullscreen .episodes-menu-button,.app-frame:-webkit-full-screen .episodes-menu-button { display:flex }
-/* ==========================================================================
-   ZOET Television Leanback 10-foot Surface (Pure AMOLED, High Contrast Focus)
-   ========================================================================== */
-html[data-display='tv'] {
-  --safe-top: 0px;
-  --safe-bottom: 0px;
-  --safe-left: 0px;
-  --safe-right: 0px;
-}
-html[data-display='tv'] body {
-  font-size: 20px;
-  background: #000000;
-}
-html[data-display='tv'] .episodes-menu-button {
-  display: flex !important;
-}
-
-/* TV Top Navigation: Single Sleek AMOLED Bar */
-html[data-display='tv'] .top-nav {
-  inset: 0 0 auto;
-  height: 84px;
-  padding: 0 56px;
-  background: rgba(0, 0, 0, 0.94);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  z-index: 40;
-}
-html[data-display='tv'] .top-nav-inner {
-  max-width: none;
-  gap: 32px;
-}
-html[data-display='tv'] .nav-brand {
-  gap: 14px;
-}
-html[data-display='tv'] .brand-text {
-  font-size: 28px;
-  letter-spacing: 2px;
-  font-weight: 800;
-  color: #ffffff;
-}
-html[data-display='tv'] .brand-mark {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-}
-html[data-display='tv'] .brand-mark svg {
-  width: 24px;
-  height: 24px;
-}
-html[data-display='tv'] .desktop-search-container,
-html[data-display='tv'] .desktop-window-controls {
-  display: none !important;
-}
-
-/* TV Catalogue Tabs (Inline inside Top Bar) */
-html[data-display='tv'] .catalogue-tabs {
-  position: static;
-  height: auto;
-  padding: 4px;
-  gap: 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-}
-html[data-display='tv'] .catalogue-tabs button {
-  font-size: 20px;
-  font-weight: 600;
-  min-width: 124px;
-  height: 46px;
-  padding: 0 22px;
-  border-radius: 999px;
-  color: #94a3b8;
-  background: transparent;
-  border: 1px solid transparent;
-}
-html[data-display='tv'] .catalogue-tabs button.active {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.22);
-}
-
-/* TV Content Canvas & Safe Overscan Spacing */
-html[data-display='tv'] .content-canvas {
-  inset: 84px 0 0;
-  padding: 0 56px 128px;
-  scroll-padding-top: 108px;
-  scroll-behavior: smooth;
-  overflow-y: auto;
-}
-html[data-display='tv'] .glass-dock {
-  background: rgba(14, 16, 22, 0.94);
-  padding: 7px;
-  gap: 8px;
-}
-html[data-display='tv'] .dock-pill {
-  height: 54px;
-  padding: 0 26px;
-  font-size: 19px;
-  gap: 10px;
-}
-html[data-display='tv'] .dock-search-fab {
-  width: 68px;
-  height: 68px;
-  background: rgba(14, 16, 22, 0.94);
-  font-size: 22px;
-}
-
-/* TV Source Switcher (All, Krmzi, Cinemana) */
-html[data-display='tv'] .source-switcher {
-  padding: 24px 0 20px;
-  gap: 20px;
-  display: flex;
-  align-items: center;
-}
-html[data-display='tv'] .source-label {
-  font-size: 19px;
-  font-weight: 600;
-  color: #94a3b8;
-}
-html[data-display='tv'] .source-options {
-  display: flex;
-  gap: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  border-radius: 999px;
-  padding: 5px;
-}
-html[data-display='tv'] .source-option {
-  min-height: 46px;
-  padding: 8px 26px;
-  font-size: 19px;
-  font-weight: 600;
-  border-radius: 999px;
-  color: #94a3b8;
-  background: transparent;
-  border: 1px solid transparent;
-  transition: all 0.2s ease;
-}
-html[data-display='tv'] .source-option.active {
-  background: rgba(255, 255, 255, 0.15);
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.25);
-}
-
-/* TV Section Headline & Media Grid: 4 Prominent Columns (No Clutter) */
-html[data-display='tv'] .feed-section {
-  padding: 0;
-  margin-bottom: 40px;
-}
-html[data-display='tv'] .section-headline {
-  margin-bottom: 24px;
-}
-html[data-display='tv'] .section-headline h1 {
-  font-size: 32px;
-  font-weight: 800;
-  color: #ffffff;
-}
-html[data-display='tv'] .section-headline .headline-muted {
-  font-size: 20px;
-  color: #64748b;
-  margin-inline-start: 14px;
-}
-html[data-display='tv'] .media-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-  align-items: start;
-  gap: 40px 32px !important;
-  padding: 8px 4px !important;
-}
-
-/* TV Series Tile: Cinema Poster Presentation with 3D Focus Pop */
-html[data-display='tv'] .series-tile {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  width: 100%;
-  text-align: start;
-  color: inherit;
-  border-radius: 16px;
-  outline: none;
-  background: transparent;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease;
-}
-html[data-display='tv'] .series-tile .poster-frame {
-  aspect-ratio: 2/3;
-  border-radius: 16px;
-  overflow: hidden;
-  border: 2px solid rgba(255, 255, 255, 0.10);
-  background: #0d0f14;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.75);
-  transition: border-color 0.22s ease, box-shadow 0.22s ease;
-}
-html[data-display='tv'] .series-tile .series-tile-thumb {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center 20%;
-}
-html[data-display='tv'] .series-tile-body {
-  padding-top: 14px;
-}
-html[data-display='tv'] .series-tile-title {
-  font-size: 21px !important;
-  font-weight: 700;
-  color: #cbd5e1;
-  line-height: 1.35;
-  height: 2.7em !important;
-  min-height: 2.7em !important;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  transition: color 0.18s ease;
-}
-html[data-display='tv'] .series-tile-sub {
-  font-size: 16px !important;
-  color: #64748b;
-  font-weight: 500;
-  margin-top: 6px;
-}
-html[data-display='tv'] .catalogue-sources {
-  margin-top: 8px;
-}
-html[data-display='tv'] .provider-tag {
-  font-size: 13px !important;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: #cbd5e1;
-}
-
-/* TV Remote Focus State for Tiles */
-html[data-display='tv'] .series-tile:focus {
-  transform: scale(1.08) translateY(-6px) !important;
-  z-index: 30 !important;
-  outline: none !important;
-}
-html[data-display='tv'] .series-tile:focus .poster-frame {
-  border-color: #ffffff !important;
-  box-shadow: 0 0 0 3.5px #ffffff, 0 24px 60px rgba(0, 0, 0, 0.95), 0 0 36px rgba(255, 255, 255, 0.45) !important;
-}
-html[data-display='tv'] .series-tile:focus .series-tile-title {
-  color: #ffffff !important;
-  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.9);
-}
-html[data-display='tv'] .series-tile:focus .series-tile-sub {
-  color: #94a3b8 !important;
-}
-
-/* TV Bullet-Fast Performance & Sizing Overhaul */
-html[data-display='tv'] * {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-html[data-display='tv'] .series-tile,
-html[data-display='tv'] .sheet-row,
-html[data-display='tv'] .tab-btn,
-html[data-display='tv'] .source-option,
-html[data-display='tv'] button {
-  transition: transform 0.08s ease-out, border-color 0.08s ease-out, box-shadow 0.08s ease-out !important;
-}
-html[data-display='tv'] .sheet-row {
-  min-height: 68px !important;
-  padding: 14px 24px !important;
-  font-size: 21px !important;
-  border-radius: 14px !important;
-  margin-bottom: 12px !important;
-  background: rgba(255, 255, 255, 0.06) !important;
-  border: 1.5px solid rgba(255, 255, 255, 0.12) !important;
-}
-html[data-display='tv'] .sheet-row:focus {
-  background: rgba(255, 255, 255, 0.22) !important;
-  border-color: #ffffff !important;
-  box-shadow: 0 0 0 3.5px #ffffff, 0 12px 32px rgba(0, 0, 0, 0.8) !important;
-  transform: scale(1.02) !important;
-}
-html[data-display='tv'] .sheet-pill {
-  font-size: 17px !important;
-  padding: 6px 16px !important;
-  border-radius: 8px !important;
-}
-html[data-display='tv'] .hud-center {
-  gap: 36px !important;
-}
-html[data-display='tv'] .center-btn {
-  width: 80px !important;
-  height: 80px !important;
-  font-size: 30px !important;
-}
-html[data-display='tv'] #centerPlay {
-  width: 96px !important;
-  height: 96px !important;
-  font-size: 40px !important;
-}
-html[data-display='tv'] .hud-bottom-right button,
-html[data-display='tv'] .hud-bottom-right select,
-html[data-display='tv'] .hud-bottom-left button {
-  min-height: 54px !important;
-  padding: 8px 20px !important;
-  font-size: 19px !important;
-  border-radius: 12px !important;
-}
-html[data-display='tv'] .hud-btn-circle {
-  width: 56px !important;
-  height: 56px !important;
-  font-size: 24px !important;
-}
-html[data-display='tv'] .time-display {
-  font-size: 19px !important;
-  font-weight: 600;
-}
-html[data-display='tv'] .hud-ep-title {
-  font-size: 26px !important;
-  font-weight: 700;
-}
-html[data-display='tv'] .hud-series-title {
-  font-size: 18px !important;
-}
-
-/* General TV Focus Rings */
-html[data-display='tv'] :is(button, input, select, [role='button'], [tabindex='0']):focus {
-  outline: none !important;
-  box-shadow: 0 0 0 3px #ffffff, 0 0 24px rgba(255, 255, 255, 0.5) !important;
-  z-index: 20;
-}
-
-/* TV Catalogue Pagination */
-html[data-display='tv'] .catalogue-pagination {
-  padding: 48px 0 24px;
-  gap: 20px;
-}
-html[data-display='tv'] .catalogue-pagination p {
-  font-size: 20px !important;
-  color: #94a3b8;
-}
-html[data-display='tv'] .load-more-btn {
-  min-height: 64px !important;
-  min-width: 240px !important;
-  font-size: 22px !important;
-  font-weight: 700;
-  border-radius: 16px !important;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1.5px solid rgba(255, 255, 255, 0.25);
-}
-html[data-display='tv'] .load-more-btn:focus {
-  transform: scale(1.07);
-  background: rgba(255, 255, 255, 0.18);
-  border-color: #ffffff;
-}
-
-/* TV Series Details Modal: Wide Dual-Pane Cinema Experience */
-html[data-display='tv'] .sheet-scrim {
-  align-items: center;
-  justify-content: center;
-  padding: 40px 60px;
-  background: rgba(0, 0, 0, 0.85);
-}
-html[data-display='tv'] .sheet-panel {
-  width: min(1360px, 94vw) !important;
-  height: 86vh !important;
-  max-height: 86vh !important;
-  border-radius: 24px !important;
-  padding: 28px 36px !important;
-  background: rgba(12, 14, 20, 0.97) !important;
-  border: 1.5px solid rgba(255, 255, 255, 0.22) !important;
-  box-shadow: 0 32px 100px rgba(0, 0, 0, 0.98) !important;
-  display: flex;
-  flex-direction: column;
-}
-html[data-display='tv'] .sheet-head {
-  padding-bottom: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  margin-bottom: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-html[data-display='tv'] .sheet-head h3 {
-  font-size: 28px !important;
-  font-weight: 800;
-  color: #ffffff;
-}
-html[data-display='tv'] .sheet-x-btn {
-  width: 54px;
-  height: 54px;
-  min-width: 54px;
-  min-height: 54px;
-  border-radius: 50%;
-  font-size: 22px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-}
-
-/* TV Series Details Dual-Pane Layout */
-html[data-display='tv'] .sheet-panel:has(.series-detail-hero) {
-  width: min(1280px, 92vw) !important;
-  height: 90vh !important;
-  max-height: 90vh !important;
-  padding: 16px 28px 24px !important;
-}
-html[data-display='tv'] .sheet-panel:has(.series-detail-hero) .sheet-head {
-  padding-inline: 8px;
-  margin-bottom: 8px;
-}
-html[data-display='tv'] .sheet-content:has(.series-detail-hero) {
-  display: grid !important;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr) !important;
-  grid-template-rows: auto auto auto minmax(0, 1fr) !important;
-  gap: 14px 28px !important;
-  overflow: hidden !important;
-  padding: 6px !important;
-  min-height: 0 !important;
-}
-html[data-display='tv'] .series-detail-hero {
-  grid-column: 1;
-  grid-row: 1 / span 3;
-  height: 100%;
-  min-height: 210px;
-  border-radius: 12px;
-  position: relative;
-  overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
-}
-html[data-display='tv'] .series-detail-info {
-  inset: auto 20px 20px;
-}
-html[data-display='tv'] .series-detail-info h4 {
-  font-size: 30px !important;
-  font-weight: 800;
-}
-html[data-display='tv'] .series-detail-story {
-  grid-column: 1;
-  grid-row: 4;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 6px;
-  font-size: 18px !important;
-  line-height: 1.8;
-  color: #cbd5e1;
-}
-html[data-display='tv'] .series-episode-heading {
-  grid-column: 2;
-  grid-row: 1;
-  padding: 0;
-  align-self: center;
-}
-html[data-display='tv'] .series-episode-heading h5 {
-  font-size: 26px !important;
-  font-weight: 800;
-}
-html[data-display='tv'] .sheet-content > .season-tabs {
-  grid-column: 2;
-  grid-row: 2;
-  padding-inline: 0;
-  margin: 0;
-  display: flex;
-  gap: 12px;
-}
-html[data-display='tv'] .season-tab {
-  min-height: 52px !important;
-  padding: 10px 24px !important;
-  font-size: 20px !important;
-  font-weight: 600;
-  border-radius: 12px !important;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  color: #cbd5e1;
-}
-html[data-display='tv'] .season-tab.active {
-  background: #ffffff !important;
-  color: #000000 !important;
-  border-color: #ffffff !important;
-}
-html[data-display='tv'] .sheet-content > .episode-search {
-  grid-column: 2;
-  grid-row: 3;
-  margin: 0;
-  min-height: 52px;
-}
-html[data-display='tv'] .sheet-content > .episode-search input {
-  min-height: 52px;
-  font-size: 19px;
-}
-html[data-display='tv'] .sheet-episode-grid.episode-card-list {
-  grid-column: 2;
-  grid-row: 4;
-  min-height: 0 !important;
-  overflow-y: auto !important;
-  padding: 6px !important;
-  align-self: stretch !important;
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 12px !important;
-}
-html[data-display='tv'] .sheet-episode-grid .episode-card {
-  min-height: 84px !important;
-  padding: 14px 22px !important;
-  border-radius: 14px !important;
-  background: rgba(255, 255, 255, 0.05) !important;
-  border: 1px solid rgba(255, 255, 255, 0.10) !important;
-  display: flex !important;
-  align-items: center !important;
-  gap: 20px !important;
-  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
-}
-html[data-display='tv'] .sheet-episode-grid .episode-card:focus {
-  transform: translateX(-10px) scale(1.02) !important;
-  background: rgba(255, 255, 255, 0.18) !important;
-  border-color: #ffffff !important;
-  box-shadow: 0 0 0 3px #ffffff, 0 10px 30px rgba(0, 0, 0, 0.85) !important;
-  z-index: 10;
-  outline: none !important;
-}
-html[data-display='tv'] .sheet-episode-grid .episode-number {
-  flex-basis: 44px !important;
-  font-size: 26px !important;
-  font-weight: 800;
-  color: #94a3b8;
-}
-html[data-display='tv'] .sheet-episode-grid .episode-copy strong {
-  font-size: 22px !important;
-  font-weight: 700;
-  color: #ffffff;
-}
-html[data-display='tv'] .sheet-episode-grid .episode-copy small {
-  font-size: 16px !important;
-  color: #64748b;
-}
-html[data-display='tv'] .sheet-episode-grid .episode-play {
-  width: 46px !important;
-  height: 46px !important;
-  min-width: 46px !important;
-  min-height: 46px !important;
-  border-radius: 50% !important;
-  background: #ffffff !important;
-  color: #000000 !important;
-  font-size: 17px !important;
-}
-
-/* TV Video Player Surface */
-html[data-display='tv'] .player-screen {
-  overflow: hidden;
-  background: #000000;
-}
-html[data-display='tv'] .player-screen .video-stage {
-  width: 100%;
-  height: 100%;
-}
-html[data-display='tv'] .player-sub-drawer {
-  display: none !important;
-}
-html[data-display='tv'] .player-bar-top {
-  padding: 36px 56px 0;
-}
-html[data-display='tv'] .hud-circle-btn {
-  width: 58px;
-  height: 58px;
-  min-width: 58px;
-  min-height: 58px;
-  font-size: 24px;
-}
-html[data-display='tv'] .hud-center-title {
-  padding: 10px 32px;
-  max-width: 60%;
-}
-html[data-display='tv'] .hud-center-title h4 {
-  font-size: 26px !important;
-  font-weight: 800;
-}
-html[data-display='tv'] .hud-center-title span {
-  font-size: 20px !important;
-  color: #94a3b8;
-}
-
-/* TV Player Center Controls */
-html[data-display='tv'] .player-center-ctrl {
-  gap: 56px !important;
-}
-html[data-display='tv'] .ctrl-circle {
-  width: 76px !important;
-  height: 76px !important;
-  min-width: 76px !important;
-  min-height: 76px !important;
-  font-size: 26px !important;
-}
-html[data-display='tv'] .ctrl-circle.primary {
-  width: 96px !important;
-  height: 96px !important;
-  min-width: 96px !important;
-  min-height: 96px !important;
-  font-size: 36px !important;
-}
-html[data-display='tv'] .ctrl-circle:focus {
-  transform: scale(1.15) !important;
-  border-color: #ffffff !important;
-  box-shadow: 0 0 0 3.5px #ffffff, 0 0 32px rgba(255, 255, 255, 0.6) !important;
-  outline: none !important;
-}
-
-/* TV Player Bottom Controls */
-html[data-display='tv'] .player-bar-bottom {
-  padding: 0 56px 36px;
-  gap: 18px;
-}
-html[data-display='tv'] .scrub-line {
-  height: 8px !important;
-  margin-bottom: 20px;
-}
-html[data-display='tv'] .scrub-line:hover,
-html[data-display='tv'] .scrub-line:focus {
-  height: 10px !important;
-}
-html[data-display='tv'] .time-readout {
-  font-size: 22px !important;
-  font-weight: 600;
-}
-html[data-display='tv'] .bar-actions {
-  gap: 16px;
-}
-html[data-display='tv'] .action-capsule {
-  min-height: 60px !important;
-  font-size: 21px !important;
-  font-weight: 700;
-  padding: 12px 26px !important;
-  border-radius: 999px !important;
-}
-html[data-display='tv'] .bar-circle-dock {
-  min-height: 60px !important;
-  padding: 4px 12px !important;
-  gap: 12px !important;
-  border-radius: 999px !important;
-}
-html[data-display='tv'] .action-circle-icon {
-  width: 50px;
-  height: 50px;
-  min-width: 50px;
-  min-height: 50px;
-  font-size: 22px;
-}
-html[data-display='tv'] :is(.action-capsule, .action-circle-icon, .hud-circle-btn):focus {
-  transform: scale(1.08) !important;
-  border-color: #ffffff !important;
-  box-shadow: 0 0 0 3px #ffffff, 0 0 24px rgba(255, 255, 255, 0.5) !important;
-  outline: none !important;
-}
-
-/* TV Status & Overlays */
-html[data-display='tv'] .player-load-status,
-html[data-display='tv'] .player-message {
-  font-size: 22px !important;
-  max-width: 700px;
-}
-html[data-display='tv'] .player-retry-btn {
-  font-size: 22px !important;
-  min-height: 60px !important;
-  padding: 14px 28px !important;
-}
-html[data-display='tv'] .search-modal {
-  inset: 0;
-  padding: 40px 60px;
-}
-html[data-display='tv'] .search-topbar {
-  max-width: 1200px;
-  padding: 24px;
-  gap: 24px;
-}
-html[data-display='tv'] .search-bar-wrap input {
-  min-height: 68px;
-  font-size: 24px;
-}
-html[data-display='tv'] .search-zero-state h3 {
-  font-size: 34px;
-}
-html[data-display='tv'] .search-zero-state p {
-  font-size: 22px;
-}
-html[data-display='tv'] .library-header-row h2 {
-  font-size: 36px;
-}
-html[data-display='tv'] .segment-btn {
-  font-size: 22px;
-  min-height: 56px;
-}
-html[data-display='tv'] .display-preference h3 {
-  font-size: 24px;
-}
-html[data-display='tv'] .display-preference p {
-  font-size: 18px;
-  max-width: 700px;
-}
-html[data-display='tv'] .display-preference select {
-  min-height: 60px;
-  font-size: 22px;
-}
-html[data-display='tv'] .v-label,
-html[data-display='tv'] .v-val,
-html[data-display='tv'] .check-update-btn {
-  font-size: 20px;
-}
+/* Legacy TV block superseded by unified Television Leanback 10-foot Overhaul at end of stylesheet. */
 
 /* Tactile, organic 120Hz physical micro-interactions (No AI slop, zero layout thrashing) */
 :root {
@@ -3562,6 +2860,621 @@ html[data-display='tv'] .series-resume-btn {
     display: none;
   }
 }
+
+/* Default non-TV state for TV rail and display pills */
+.tv-rail-nav,
+.tv-display-pills {
+  display: none;
+}
+
+/* =========================================================================
+   ZOET Television Leanback 10-Foot Overhaul (Single Top Rail, DPI-Aware,
+   Zero-Reflow Performance, High-Contrast AMOLED — Zero AI Slop)
+   ========================================================================= */
+html[data-display='tv'] {
+  --safe-top: 0px;
+  --safe-bottom: 0px;
+  --safe-left: 0px;
+  --safe-right: 0px;
+  --tv-pad-x: clamp(24px, 3vw, 48px);
+}
+html[data-display='tv'] body {
+  background: #000000;
+  font-size: clamp(14px, 1.15vw, 18px);
+}
+/* Kill GPU-heavy blur & slow multi-shadows globally on TV */
+html[data-display='tv'] * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+html[data-display='tv'] .series-tile,
+html[data-display='tv'] .sheet-row,
+html[data-display='tv'] .episode-card,
+html[data-display='tv'] .source-option,
+html[data-display='tv'] .tv-nav-btn,
+html[data-display='tv'] button {
+  transition: transform 0.06s linear, border-color 0.06s linear, background-color 0.06s linear !important;
+}
+
+/* 1. Hide mobile Floating Dock & Scrim completely; use single unified TV top rail */
+html[data-display='tv'] #floatingDockWrap,
+html[data-display='tv'] .glass-dock-wrap::before,
+html[data-display='tv'] .desktop-search-container,
+html[data-display='tv'] .desktop-window-controls,
+html[data-display='tv'] #displayModeSelect {
+  display: none !important;
+}
+html[data-display='tv'] .episodes-menu-button {
+  display: flex !important;
+}
+
+/* 2. Single Compact TV Top Rail: ZOET | المسلسلات | الأفلام | المكتبة | بحث | الإعدادات */
+html[data-display='tv'] .top-nav {
+  inset: 0 0 auto;
+  height: clamp(56px, 7.2vh, 74px);
+  padding: 0 var(--tv-pad-x);
+  background: #06070a;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  z-index: 40;
+}
+html[data-display='tv'] .top-nav-inner {
+  max-width: none;
+  justify-content: flex-start;
+  gap: clamp(14px, 2vw, 28px);
+}
+html[data-display='tv'] .nav-brand {
+  gap: 10px;
+}
+html[data-display='tv'] .brand-mark {
+  width: clamp(28px, 2.4vw, 36px);
+  height: clamp(28px, 2.4vw, 36px);
+  border-radius: 9px;
+}
+html[data-display='tv'] .brand-mark svg {
+  width: 18px;
+  height: 18px;
+}
+html[data-display='tv'] .brand-text {
+  font-size: clamp(18px, 1.5vw, 24px);
+  letter-spacing: 1.8px;
+}
+html[data-display='tv'] .top-nav-end {
+  display: none !important;
+}
+html[data-display='tv'] .catalogue-tabs {
+  display: inline-flex !important;
+  margin-inline-start: 0 !important;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  gap: clamp(8px, 1vw, 14px);
+}
+html[data-display='tv'] .catalogue-tabs button {
+  height: clamp(38px, 5vh, 48px);
+  min-width: auto;
+  padding: 0 clamp(14px, 1.4vw, 20px);
+  border-radius: 999px;
+  border: 1.5px solid transparent;
+  border-bottom: 1.5px solid transparent;
+  background: rgba(255, 255, 255, 0.04) !important;
+  color: #a1a8b5;
+  font-size: clamp(14px, 1.15vw, 18px);
+  font-weight: 700;
+}
+html[data-display='tv'] .catalogue-tabs button.active {
+  background: rgba(255, 255, 255, 0.16) !important;
+  border-color: rgba(255, 255, 255, 0.24) !important;
+  color: #ffffff;
+}
+html[data-display='tv'] .tv-rail-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: clamp(8px, 1vw, 14px);
+  margin-inline-start: auto;
+}
+html[data-display='tv'] .tv-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: clamp(38px, 5vh, 48px);
+  padding: 0 clamp(14px, 1.4vw, 20px);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1.5px solid rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+  font-size: clamp(14px, 1.15vw, 18px);
+  font-weight: 700;
+  white-space: nowrap;
+}
+html[data-display='tv'] .tv-nav-btn.active {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: #090b0f;
+}
+
+/* 3. TV Content Canvas & DPI-Calibrated Grid (Fits 2 full poster rows cleanly on 540p, 720p, and 1080p) */
+html[data-display='tv'] .content-canvas {
+  inset: clamp(56px, 7.2vh, 74px) 0 0 !important;
+  padding: 0 var(--tv-pad-x) 48px !important;
+  scroll-padding-top: 24px;
+  scroll-behavior: auto !important;
+  overflow-y: auto;
+}
+html[data-display='tv'] .source-switcher {
+  max-width: none;
+  width: 100%;
+  padding: clamp(10px, 1.5vh, 18px) 0 !important;
+  gap: 14px;
+  justify-content: flex-start;
+}
+html[data-display='tv'] .source-switcher .source-label {
+  display: flex !important;
+  font-size: clamp(13px, 1.05vw, 16px);
+  font-weight: 600;
+  color: #94a3b8;
+}
+html[data-display='tv'] .source-switcher .source-options {
+  width: auto !important;
+  display: inline-flex !important;
+  gap: 6px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+}
+html[data-display='tv'] .source-switcher .source-option {
+  flex: none !important;
+  min-height: clamp(34px, 4.4vh, 44px);
+  padding: 4px clamp(14px, 1.3vw, 22px);
+  font-size: clamp(13px, 1.05vw, 17px);
+  font-weight: 700;
+  border-radius: 999px;
+  color: #94a3b8;
+  border: 1.5px solid transparent;
+}
+html[data-display='tv'] .source-switcher .source-option.active {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #ffffff;
+}
+
+html[data-display='tv'] .feed-section {
+  max-width: none;
+  padding: 0 !important;
+  margin-bottom: 32px;
+}
+html[data-display='tv'] .continue-strip {
+  margin-bottom: clamp(12px, 1.8vh, 20px);
+}
+html[data-display='tv'] .continue-pill {
+  padding: clamp(10px, 1.2vh, 14px) clamp(14px, 1.5vw, 20px);
+  background: rgba(255, 255, 255, 0.05);
+  border-width: 1.5px;
+}
+html[data-display='tv'] .continue-copy strong {
+  font-size: clamp(11px, 0.9vw, 14px);
+}
+html[data-display='tv'] .continue-copy small {
+  font-size: clamp(14px, 1.15vw, 18px);
+}
+html[data-display='tv'] .continue-time {
+  font-size: clamp(12px, 1vw, 15px);
+}
+
+/* Responsive TV Card Grid: crisp 5 cols on 960px-1359px, 6 cols on 1360px+ */
+html[data-display='tv'] .media-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  gap: clamp(16px, 2vw, 28px) clamp(14px, 1.6vw, 24px) !important;
+  padding: 10px 8px !important;
+  contain: layout style;
+}
+@media (min-width: 1360px) {
+  html[data-display='tv'] .media-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  }
+}
+@media (max-width: 899px) {
+  html[data-display='tv'] .media-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Fast Card Paint + Single Sharp Focus Ring (ZERO double glow / ZERO 60px shadow lag) */
+html[data-display='tv'] .series-tile {
+  border-radius: 12px;
+  contain: layout style paint;
+  content-visibility: auto;
+  contain-intrinsic-size: auto clamp(210px, 32vh, 360px);
+}
+html[data-display='tv'] .series-tile .poster-frame {
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.09);
+  background: #0c0e13;
+  box-shadow: none !important;
+}
+html[data-display='tv'] .series-tile-body {
+  padding: 8px 2px 0;
+}
+html[data-display='tv'] .series-tile-title {
+  font-size: clamp(13px, 1.1vw, 17px) !important;
+  font-weight: 700;
+  color: #cbd5e1;
+  line-height: 1.35;
+}
+html[data-display='tv'] .series-tile-sub {
+  font-size: clamp(11px, 0.9vw, 14px) !important;
+  color: #8492a6;
+}
+html[data-display='tv'] .provider-tag {
+  font-size: clamp(10px, 0.8vw, 13px) !important;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+}
+html[data-display='tv'] .edition-badge {
+  top: 6px;
+  right: 6px;
+  padding: 3px 8px;
+  font-size: clamp(10px, 0.85vw, 13px);
+  background: rgba(8, 10, 14, 0.9);
+}
+
+/* Single High-Contrast White Focus Ring ONLY on focused card/control */
+html[data-display='tv'] .series-tile:focus {
+  transform: scale(1.03) !important;
+  z-index: 25 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+html[data-display='tv'] .series-tile:focus .poster-frame {
+  border-color: #ffffff !important;
+  box-shadow: 0 0 0 2.5px #ffffff !important;
+}
+html[data-display='tv'] .series-tile:focus .series-tile-title {
+  color: #ffffff !important;
+}
+html[data-display='tv'] :is(button:not(.series-tile), input, select, [role='button'], [tabindex='0']):focus {
+  outline: 2.5px solid #ffffff !important;
+  outline-offset: 2px;
+  box-shadow: none !important;
+  z-index: 20;
+}
+
+/* 4. Pagination & Offline */
+html[data-display='tv'] .catalogue-pagination {
+  padding: 28px 0 18px;
+  gap: 14px;
+}
+html[data-display='tv'] .catalogue-pagination p {
+  font-size: clamp(14px, 1.1vw, 17px) !important;
+}
+html[data-display='tv'] .load-more-btn {
+  min-height: 50px !important;
+  min-width: 200px !important;
+  font-size: clamp(15px, 1.2vw, 18px) !important;
+  font-weight: 700;
+  border-radius: 12px !important;
+}
+
+/* 5. TV Library & Standalone Settings Views (Readable 10-foot Scale + Pill Controls) */
+html[data-display='tv'] .library-wrap,
+html[data-display='tv'] .settings-wrap {
+  padding-top: clamp(16px, 2vh, 24px) !important;
+}
+html[data-display='tv'] .library-header-row h2,
+html[data-display='tv'] .settings-header h2 {
+  font-size: clamp(22px, 2vw, 30px) !important;
+  font-weight: 800;
+}
+html[data-display='tv'] .settings-header p {
+  font-size: clamp(13px, 1.05vw, 16px) !important;
+}
+html[data-display='tv'] .segment-btn {
+  min-height: 44px;
+  padding: 0 22px;
+  font-size: clamp(14px, 1.15vw, 17px);
+}
+html[data-display='tv'] .clear-history-btn {
+  font-size: clamp(13px, 1.05vw, 16px);
+  padding: 8px 14px;
+}
+html[data-display='tv'] .settings-shell {
+  max-width: min(980px, 100%);
+}
+html[data-display='tv'] .settings-section-label {
+  font-size: clamp(12px, 1vw, 15px);
+  margin: 20px 6px 8px;
+}
+html[data-display='tv'] .settings-row {
+  padding: clamp(14px, 1.8vh, 20px) clamp(16px, 1.8vw, 24px);
+  gap: 18px;
+}
+html[data-display='tv'] .settings-row-ico {
+  width: clamp(38px, 3vw, 46px);
+  height: clamp(38px, 3vw, 46px);
+}
+html[data-display='tv'] .settings-row h3 {
+  font-size: clamp(15px, 1.25vw, 19px);
+}
+html[data-display='tv'] .settings-row p {
+  font-size: clamp(12px, 1vw, 15px);
+  max-width: none;
+}
+html[data-display='tv'] .tv-display-pills {
+  display: inline-flex !important;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 4px;
+  gap: 6px;
+}
+html[data-display='tv'] .tv-display-pills .source-option {
+  min-height: 40px;
+  padding: 6px 18px;
+  font-size: clamp(13px, 1.05vw, 16px);
+  font-weight: 700;
+  border-radius: 999px;
+  color: #a1a8b5;
+}
+html[data-display='tv'] .tv-display-pills .source-option.active {
+  background: #ffffff;
+  color: #090b0f;
+}
+html[data-display='tv'] .settings-source-pills .source-option {
+  min-height: 40px;
+  padding: 6px 18px;
+  font-size: clamp(13px, 1.05vw, 16px);
+}
+html[data-display='tv'] .check-update-btn,
+html[data-display='tv'] .settings-btn {
+  min-height: 44px;
+  padding: 8px 18px;
+  font-size: clamp(13px, 1.05vw, 16px);
+}
+html[data-display='tv'] .settings-danger-tag {
+  font-size: clamp(12px, 1vw, 15px);
+  padding: 6px 14px;
+}
+html[data-display='tv'] .settings-input {
+  min-height: 46px;
+  font-size: clamp(13px, 1.05vw, 16px);
+}
+
+/* 6. TV Sheets & Dual-Pane Series Detail */
+html[data-display='tv'] .sheet-scrim {
+  align-items: center;
+  justify-content: center;
+  padding: clamp(18px, 3vh, 36px) var(--tv-pad-x);
+  background: rgba(0, 0, 0, 0.88);
+}
+html[data-display='tv'] .sheet-grabber {
+  display: none !important;
+}
+html[data-display='tv'] .sheet-panel {
+  width: min(1240px, 94vw) !important;
+  height: 88vh !important;
+  max-height: 88vh !important;
+  border-radius: 18px !important;
+  padding: clamp(18px, 2.2vh, 28px) clamp(20px, 2.4vw, 32px) !important;
+  background: #0c0e14 !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.18) !important;
+  box-shadow: none !important;
+}
+html[data-display='tv'] .sheet-head {
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 14px;
+}
+html[data-display='tv'] .sheet-head h3 {
+  font-size: clamp(18px, 1.6vw, 24px) !important;
+  font-weight: 800;
+}
+html[data-display='tv'] .sheet-x-btn {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+}
+html[data-display='tv'] .sheet-row {
+  min-height: 54px !important;
+  padding: 12px 18px !important;
+  font-size: clamp(15px, 1.25vw, 19px) !important;
+  border-radius: 12px !important;
+  margin-bottom: 10px !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.12) !important;
+}
+html[data-display='tv'] .sheet-row:focus {
+  background: rgba(255, 255, 255, 0.2) !important;
+  border-color: #ffffff !important;
+}
+html[data-display='tv'] .sheet-pill {
+  font-size: clamp(12px, 1vw, 15px) !important;
+  padding: 4px 12px !important;
+}
+html[data-display='tv'] .sheet-content:has(.series-detail-hero) {
+  display: grid !important;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr) !important;
+  grid-template-rows: auto auto auto minmax(0, 1fr) !important;
+  gap: 12px 24px !important;
+  overflow: hidden !important;
+  padding: 4px !important;
+  min-height: 0 !important;
+}
+html[data-display='tv'] .series-detail-hero {
+  grid-column: 1;
+  grid-row: 1 / span 3;
+  height: 100%;
+  min-height: 180px;
+  border-radius: 12px;
+  box-shadow: none !important;
+}
+html[data-display='tv'] .series-detail-info h4 {
+  font-size: clamp(20px, 1.8vw, 28px) !important;
+  font-weight: 800;
+}
+html[data-display='tv'] .series-detail-story {
+  grid-column: 1;
+  grid-row: 4;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px;
+  font-size: clamp(13px, 1.1vw, 16px) !important;
+  line-height: 1.75;
+}
+html[data-display='tv'] .series-resume-btn {
+  grid-column: 1;
+  grid-row: 5;
+  width: 100%;
+  margin: 0;
+  min-height: 48px;
+  font-size: clamp(14px, 1.15vw, 17px);
+}
+html[data-display='tv'] .series-episode-heading {
+  grid-column: 2;
+  grid-row: 1;
+  padding: 0;
+}
+html[data-display='tv'] .series-episode-heading h5 {
+  font-size: clamp(18px, 1.5vw, 22px) !important;
+}
+html[data-display='tv'] .sheet-content > .season-tabs {
+  grid-column: 2;
+  grid-row: 2;
+  padding-inline: 0;
+  margin: 0;
+  gap: 8px;
+}
+html[data-display='tv'] .season-tab {
+  min-height: 42px !important;
+  padding: 6px 16px !important;
+  font-size: clamp(14px, 1.1vw, 17px) !important;
+  border-radius: 10px !important;
+}
+html[data-display='tv'] .season-tab.active {
+  background: #ffffff !important;
+  color: #090b0f !important;
+}
+html[data-display='tv'] .sheet-content > .episode-search {
+  grid-column: 2;
+  grid-row: 3;
+  margin: 0;
+  min-height: 44px;
+}
+html[data-display='tv'] .sheet-episode-grid.episode-card-list {
+  grid-column: 2;
+  grid-row: 4 / span 2;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  padding: 4px !important;
+  gap: 10px !important;
+}
+html[data-display='tv'] .sheet-episode-grid .episode-card {
+  min-height: 66px !important;
+  padding: 10px 16px !important;
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.09) !important;
+  gap: 14px !important;
+}
+html[data-display='tv'] .sheet-episode-grid .episode-card:focus {
+  background: rgba(255, 255, 255, 0.18) !important;
+  border-color: #ffffff !important;
+}
+html[data-display='tv'] .sheet-episode-grid .episode-number {
+  flex-basis: 36px !important;
+  font-size: clamp(16px, 1.35vw, 22px) !important;
+}
+html[data-display='tv'] .sheet-episode-grid .episode-copy strong {
+  font-size: clamp(15px, 1.25vw, 19px) !important;
+}
+html[data-display='tv'] .sheet-episode-grid .episode-copy small {
+  font-size: clamp(12px, 1vw, 15px) !important;
+}
+html[data-display='tv'] .sheet-episode-grid .episode-play {
+  width: 38px !important;
+  height: 38px !important;
+  min-width: 38px !important;
+  min-height: 38px !important;
+  background: #ffffff !important;
+  color: #090b0f !important;
+}
+
+/* 7. TV Search & Player Surfaces */
+html[data-display='tv'] .search-modal {
+  inset: 0;
+  padding: clamp(18px, 3vh, 36px) var(--tv-pad-x);
+}
+html[data-display='tv'] .search-topbar {
+  max-width: 1100px;
+  gap: 16px;
+}
+html[data-display='tv'] .search-bar-wrap input {
+  min-height: 54px;
+  font-size: clamp(16px, 1.4vw, 22px);
+}
+html[data-display='tv'] .player-screen {
+  overflow: hidden;
+  background: #000000;
+}
+html[data-display='tv'] .player-screen .video-stage {
+  width: 100%;
+  height: 100%;
+}
+html[data-display='tv'] .player-sub-drawer {
+  display: none !important;
+}
+html[data-display='tv'] .player-bar-top {
+  padding: clamp(18px, 3vh, 32px) var(--tv-pad-x) 0;
+}
+html[data-display='tv'] .hud-circle-btn {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+}
+html[data-display='tv'] .hud-center-title h4 {
+  font-size: clamp(18px, 1.5vw, 24px) !important;
+}
+html[data-display='tv'] .hud-center-title span {
+  font-size: clamp(13px, 1.1vw, 18px) !important;
+}
+html[data-display='tv'] .player-center-ctrl {
+  gap: clamp(28px, 4vw, 52px) !important;
+}
+html[data-display='tv'] .ctrl-circle {
+  width: clamp(56px, 5vw, 72px) !important;
+  height: clamp(56px, 5vw, 72px) !important;
+  min-width: 56px !important;
+  min-height: 56px !important;
+}
+html[data-display='tv'] .ctrl-circle.primary {
+  width: clamp(72px, 6.2vw, 90px) !important;
+  height: clamp(72px, 6.2vw, 90px) !important;
+  min-width: 72px !important;
+  min-height: 72px !important;
+}
+html[data-display='tv'] .player-bar-bottom {
+  padding: 0 var(--tv-pad-x) clamp(18px, 3vh, 32px);
+  gap: 14px;
+}
+html[data-display='tv'] .time-readout {
+  font-size: clamp(14px, 1.2vw, 19px) !important;
+}
+html[data-display='tv'] .action-capsule {
+  min-height: 48px !important;
+  font-size: clamp(14px, 1.15vw, 18px) !important;
+  padding: 8px 20px !important;
+}
+html[data-display='tv'] .action-circle-icon {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+}
+
 
 
 
