@@ -54,6 +54,8 @@ struct Gesture {
     moved: bool,
     hold: bool,
     previous_rate: f64,
+    swipe_mode: u8,
+    swipe_start_val: f64,
 }
 struct Player {
     session: u64,
@@ -86,6 +88,7 @@ struct Player {
     hold: Option<Timeout>,
     tap_timer: Option<Timeout>,
     embed_timer: Option<Timeout>,
+    unlock_timer: Option<Timeout>,
     gesture: Gesture,
     last_tap: f64,
     embed_handler: Option<Closure<dyn FnMut(Event)>>,
@@ -95,6 +98,8 @@ struct Player {
     season: String,
     sub_offset: f64,
     boost_volume: f64,
+    brightness: f64,
+    locked: bool,
     audio_context: Option<AudioContext>,
     gain_node: Option<GainNode>,
 }
@@ -131,6 +136,7 @@ impl Default for Player {
             hold: None,
             tap_timer: None,
             embed_timer: None,
+            unlock_timer: None,
             embed_handler: None,
             gesture: Gesture::default(),
             last_tap: 0.,
@@ -140,6 +146,8 @@ impl Default for Player {
             season: "1".into(),
             sub_offset: 0.,
             boost_volume: 1.0,
+            brightness: 1.0,
+            locked: false,
             audio_context: None,
             gain_node: None,
         }
@@ -419,6 +427,7 @@ fn subtitles(episode: &Value) {
             let _ = v.append_child(&node);
         }
     }
+    sync_tool_states();
 }
 pub fn open_episode(url: String, resume: Option<PlaybackSnapshot>) {
     open(url, resume, false);
@@ -464,10 +473,17 @@ fn open(url: String, resume: Option<PlaybackSnapshot>, fresh: bool) {
         p.next_deadline = None;
         p.next_cancelled = false;
         p.embed_timer = None;
+        p.sub_offset = 0.;
+        p.locked = false;
+        p.unlock_timer = None;
         p.session
     });
+    class("mobilePlayer", "touch-locked", false);
+    show("unlockTouchBtn", false);
     release_media();
+    el("appFrame").set_scroll_top(0);
     show("mobilePlayer", true);
+    sync_tool_states();
     show("autoNextCard", false);
     show("skipIntroBtn", false);
     html("drawerEpisodesCarousel", "");
@@ -646,11 +662,9 @@ fn start_attempt() {
     let source = current_episode()
         .map(|ep| catalogue::provider(&ep).to_string())
         .unwrap_or_default();
-    text(
-        "activeServerLabel",
-        &format!("{} · مباشر", source_name(&source)),
-    );
-    text("drawerActiveServerName", source_name(&source));
+    let s_name = source_name(&source);
+    text("activeServerLabel", s_name);
+    text("drawerActiveServerName", &format!("{s_name} · مباشر"));
     text("activeQualityLabel", &s(&selected, "quality"));
     v.set_preload("auto");
     v.set_volume(settings.volume.clamp(0., 1.));
@@ -1110,6 +1124,15 @@ fn render_drawer() {
         },
     );
     text("drawerCount", &format!("{} حلقة", episodes.len()));
+    let scroller = el("drawerEpisodesCarousel");
+    if let Ok(Some(active_el)) = scroller.query_selector(".episode-card.active") {
+        let sr = scroller.get_bounding_client_rect();
+        let er = active_el.get_bounding_client_rect();
+        let cur = scroller.scroll_top() as f64;
+        let target = cur + (er.top() - sr.top()) - (sr.height() - er.height()) / 2.;
+        scroller.set_scroll_top(target.max(0.) as i32);
+    }
+    el("appFrame").set_scroll_top(0);
 }
 fn all_episodes() {
     let (episodes, episode) = STATE.with(|c| {
@@ -1732,7 +1755,13 @@ pub fn close() {
         p.hud = None;
         p.hold = None;
         p.tap_timer = None;
+        p.unlock_timer = None;
+        p.locked = false;
+        p.brightness = 1.0;
     });
+    class("mobilePlayer", "touch-locked", false);
+    show("unlockTouchBtn", false);
+    style("playerBrightnessOverlay", "opacity", "0");
     release_media();
     show("mobilePlayer", false);
     show("playerSpinner", false);
@@ -1915,11 +1944,192 @@ pub fn toggle_theater() {
     let wide = !el("mobilePlayer").class_list().contains("wide-mode");
     class("mobilePlayer", "wide-mode", wide);
     store("zoet_player_wide", if wide { "1" } else { "0" });
+    sync_tool_states();
     pill(if wide {
         "وضع العرض: شاشة عريضة"
     } else {
         "وضع المسرح: قائمة الحلقات الجانبية"
     });
+}
+fn sync_tool_states() {
+    let sub_showing = video()
+        .text_tracks()
+        .map(|tracks| {
+            (0..tracks.length()).any(|i| {
+                tracks
+                    .get(i)
+                    .is_some_and(|t| t.mode() == TextTrackMode::Showing)
+            })
+        })
+        .unwrap_or(false);
+    class("toggleSubtitlesBtn", "active", sub_showing);
+    let _ = el("toggleSubtitlesBtn").set_attribute("aria-pressed", if sub_showing { "true" } else { "false" });
+    let wide = el("mobilePlayer").class_list().contains("wide-mode");
+    class("toggleTheaterBtn", "active", wide);
+    let filter = storage("zoet_video_filter").unwrap_or_else(|| "normal".into());
+    class("toggleVideoFilterBtn", "active", filter != "normal");
+    let fit = storage("otium_fit_mode").unwrap_or_else(|| "contain".into());
+    class("toggleAspectRatioBtn", "active", fit != "contain");
+    let fs = document().fullscreen_element().is_some();
+    class("toggleFullscreenBtn", "active", fs);
+    html(
+        "toggleFullscreenBtn",
+        if fs {
+            icons::FULLSCREEN_EXIT
+        } else {
+            icons::FULLSCREEN_ENTER
+        },
+    );
+}
+fn apply_brightness(level: f64) {
+    let level = level.clamp(0.25, 1.0);
+    STATE.with(|c| c.borrow_mut().brightness = level);
+    let dim = (1.0 - level).clamp(0.0, 0.75);
+    style("playerBrightnessOverlay", "opacity", &format!("{dim:.3}"));
+}
+fn set_boost(target: f64) {
+    let target = target.clamp(0., 3.0);
+    let v = video();
+    STATE.with(|c| c.borrow_mut().boost_volume = target);
+    v.set_muted(false);
+    if target <= 1.0 {
+        v.set_volume(target);
+        STATE.with(|c| {
+            if let Some(gain) = &c.borrow().gain_node {
+                gain.gain().set_value(1.0);
+            }
+        });
+        pill(&format!("الصوت {:.0}%", target * 100.));
+    } else {
+        v.set_volume(1.0);
+        ensure_audio_boost(&v);
+        STATE.with(|c| {
+            if let Some(gain) = &c.borrow().gain_node {
+                gain.gain().set_value(target as f32);
+            }
+        });
+        pill(&format!("مضخم الصوت: {:.0}%", target * 100.));
+    }
+}
+fn set_speed(rate: f64) {
+    let rate = rate.clamp(0.5, 2.0);
+    video().set_playback_rate(rate);
+    STATE.with(|c| c.borrow_mut().settings.rate = rate);
+    pill(&format!("السرعة: {rate}×"));
+}
+fn reveal_unlock_pill() {
+    show("unlockTouchBtn", true);
+    let timer = Timeout::new(2400, || {
+        if STATE.with(|c| c.borrow().locked) {
+            show("unlockTouchBtn", false);
+        }
+    });
+    STATE.with(|c| c.borrow_mut().unlock_timer = Some(timer));
+}
+fn set_touch_locked(locked: bool) {
+    STATE.with(|c| {
+        let mut p = c.borrow_mut();
+        p.locked = locked;
+        p.unlock_timer = None;
+    });
+    class("mobilePlayer", "touch-locked", locked);
+    if locked {
+        app::close_sheet();
+        hide_hud();
+        reveal_unlock_pill();
+        pill("تم قفل شاشة اللمس");
+    } else {
+        show("unlockTouchBtn", false);
+        show_hud(true);
+        pill("تم إلغاء قفل الشاشة");
+    }
+}
+pub fn open_tools_sheet() {
+    let v = video();
+    let cur_rate = v.playback_rate();
+    let cur_boost = STATE.with(|c| c.borrow().boost_volume);
+    let cur_fit = storage("otium_fit_mode").unwrap_or_else(|| "contain".into());
+    let cur_filter = storage("zoet_video_filter").unwrap_or_else(|| "normal".into());
+    let cur_offset = STATE.with(|c| c.borrow().sub_offset);
+    let has_subs = v
+        .text_tracks()
+        .is_some_and(|t| t.length() > 0);
+    let is_locked = STATE.with(|c| c.borrow().locked);
+    let is_wide = el("mobilePlayer").class_list().contains("wide-mode");
+
+    let mut html = String::from("<div class=\"player-tools-sheet\">");
+
+    html.push_str("<div class=\"sheet-sub-title\">سرعة التشغيل</div><div class=\"sheet-chip-grid\">");
+    for rate in [0.5, 0.75, 1.0, 1.25, 1.5, 2.0] {
+        let active = (cur_rate - rate).abs() < 0.05;
+        let label = if (rate - 1.0).abs() < 0.01 { "عادي 1×".into() } else { format!("{rate}×") };
+        html.push_str(&format!(
+            "<button class=\"sheet-chip-btn {}\" data-player-action=\"speed\" data-rate=\"{rate}\">{label}</button>",
+            if active { "active" } else { "" }
+        ));
+    }
+    html.push_str("</div>");
+
+    html.push_str("<div class=\"sheet-sub-title\">مضخّم الصوت</div><div class=\"sheet-chip-grid\">");
+    for (val, label) in [(1.0, "100%"), (1.5, "150%"), (2.0, "200%"), (3.0, "300%")] {
+        let active = (cur_boost - val).abs() < 0.12;
+        html.push_str(&format!(
+            "<button class=\"sheet-chip-btn {}\" data-player-action=\"boost\" data-boost=\"{val}\">{label}</button>",
+            if active { "active" } else { "" }
+        ));
+    }
+    html.push_str("</div>");
+
+    html.push_str("<div class=\"sheet-sub-title\">أبعاد العرض</div><div class=\"sheet-chip-grid\">");
+    for (mode, label) in [("contain", "الإطار الكامل"), ("cover", "ملء الشاشة"), ("fill", "تمدد")] {
+        let active = cur_fit == mode;
+        html.push_str(&format!(
+            "<button class=\"sheet-chip-btn {}\" data-player-action=\"fit-mode\" data-mode=\"{mode}\">{label}</button>",
+            if active { "active" } else { "" }
+        ));
+    }
+    html.push_str("</div>");
+
+    html.push_str("<div class=\"sheet-sub-title\">فلاتر الصورة</div><div class=\"sheet-chip-grid\">");
+    for (id, label, _) in FILTERS {
+        let active = cur_filter == id;
+        html.push_str(&format!(
+            "<button class=\"sheet-chip-btn {}\" data-player-action=\"filter-preset\" data-filter=\"{id}\">{label}</button>",
+            if active { "active" } else { "" }
+        ));
+    }
+    html.push_str("</div>");
+
+    html.push_str("<div class=\"sheet-sub-title\">الترجمة والتزامن</div><div class=\"sheet-chip-grid\">");
+    if has_subs {
+        html.push_str("<button class=\"sheet-chip-btn\" data-player-action=\"sub-toggle\">تشغيل / إيقاف الترجمة</button>");
+    }
+    html.push_str(&format!(
+        "<button class=\"sheet-chip-btn\" data-player-action=\"sub-delay\" data-delta=\"-0.5\">تقديم -0.5ث</button><button class=\"sheet-chip-btn\" data-player-action=\"sub-delay-reset\">تصفير ({:+.1}ث)</button><button class=\"sheet-chip-btn\" data-player-action=\"sub-delay\" data-delta=\"0.5\">تأخير +0.5ث</button>",
+        cur_offset
+    ));
+    html.push_str("<button class=\"sheet-chip-btn\" data-player-action=\"sub-import\">تحميل ملف (.srt / .vtt)</button></div>");
+
+    html.push_str("<div class=\"sheet-sub-title\">إجراءات سريعة</div>");
+    html.push_str(&format!(
+        "<button class=\"sheet-row\" data-player-action=\"lock-touch\"><span class=\"sheet-row-label\">{}<span>{}</span></span><span class=\"sheet-pill\">لمنع النقرات العرضية</span></button>",
+        icons::LOCK,
+        if is_locked { "إلغاء قفل شاشة اللمس" } else { "قفل شاشة اللمس" }
+    ));
+    html.push_str(&format!(
+        "<button class=\"sheet-row\" data-player-action=\"snapshot\"><span class=\"sheet-row-label\">{}<span>التقاط صورة من المشهد</span></span><span class=\"sheet-pill\">PNG</span></button>",
+        icons::CAMERA
+    ));
+    html.push_str("<button class=\"sheet-row\" data-player-action=\"toggle-pip\"><span>صورة داخل صورة (نافذة عائمة)</span><span class=\"sheet-pill\">PiP</span></button>");
+    if window().inner_width().ok().and_then(|v| v.as_f64()).unwrap_or(0.) >= 1024. {
+        html.push_str(&format!(
+            "<button class=\"sheet-row\" data-player-action=\"toggle-theater\"><span>{}</span><span class=\"sheet-pill\">T</span></button>",
+            if is_wide { "إظهار قائمة الحلقات الجانبية" } else { "وضع الشاشة العريضة" }
+        ));
+    }
+    html.push_str("<button class=\"sheet-row\" data-player-action=\"controls-help\"><span>اختصارات التحكم والريموت</span><span class=\"sheet-pill\">؟</span></button>");
+    html.push_str("</div>");
+    app::open_sheet("أدوات المشغل", &html);
 }
 fn ensure_audio_boost(v: &HtmlVideoElement) {
     let connected = STATE.with(|c| c.borrow().gain_node.is_some());
@@ -1941,30 +2151,8 @@ fn ensure_audio_boost(v: &HtmlVideoElement) {
     }
 }
 pub fn adjust_volume(delta: f64) {
-    let v = video();
     let current = STATE.with(|c| c.borrow().boost_volume);
-    let new_vol = (current + delta).clamp(0., 3.0);
-    STATE.with(|c| c.borrow_mut().boost_volume = new_vol);
-    v.set_muted(false);
-
-    if new_vol <= 1.0 {
-        v.set_volume(new_vol);
-        STATE.with(|c| {
-            if let Some(gain) = &c.borrow().gain_node {
-                gain.gain().set_value(1.0);
-            }
-        });
-        pill(&format!("الصوت {:.0}%", new_vol * 100.));
-    } else {
-        v.set_volume(1.0);
-        ensure_audio_boost(&v);
-        STATE.with(|c| {
-            if let Some(gain) = &c.borrow().gain_node {
-                gain.gain().set_value(new_vol as f32);
-            }
-        });
-        pill(&format!("مضخم الصوت: {:.0}% ⚡", new_vol * 100.));
-    }
+    set_boost(current + delta);
 }
 pub fn adjust_sub_delay(delta_seconds: f64) {
     let new_offset = STATE.with(|c| {
@@ -1992,6 +2180,14 @@ pub fn adjust_sub_delay(delta_seconds: f64) {
         }
     }
     pill(&format!("مزامنة الترجمة: {:+.2} ثانية", new_offset));
+}
+fn reset_sub_delay() {
+    let offset = STATE.with(|c| c.borrow().sub_offset);
+    if offset.abs() > 0.001 {
+        adjust_sub_delay(-offset);
+    } else {
+        pill("مزامنة الترجمة: +0.00 ثانية");
+    }
 }
 pub fn take_snapshot() {
     let v = video();
@@ -2042,6 +2238,7 @@ pub fn cycle_video_filter() {
     let (id, label, css) = FILTERS[next_idx];
     store("zoet_video_filter", id);
     apply_video_filter(css);
+    sync_tool_states();
     pill(&format!("فلتر الصورة: {label}"));
 }
 
@@ -2078,6 +2275,56 @@ pub fn toggle_mute() {
     v.set_muted(muted);
     pill(if muted { "تم كتم الصوت" } else { "تم تشغيل الصوت" });
 }
+fn load_subtitle_file(file: web_sys::File) {
+    let name = file.name();
+    let lower = name.to_lowercase();
+    if !lower.ends_with(".srt") && !lower.ends_with(".vtt") {
+        pill("يرجى اختيار ملف ترجمة بصيغة .srt أو .vtt");
+        return;
+    }
+    let Ok(reader) = FileReader::new() else { return; };
+    let reader_clone = reader.clone();
+    let file_name = name.clone();
+    let is_srt = lower.ends_with(".srt");
+    let onload = Closure::wrap(Box::new(move |_: Event| {
+        if let Ok(result) = reader_clone.result() {
+            if let Some(text) = result.as_string() {
+                let vtt_text = if is_srt {
+                    let re = js_sys::RegExp::new(r"(\d{2}:\d{2}:\d{2}),(\d{3})", "g");
+                    let converted = js_sys::JsString::from(text.as_str()).replace_by_pattern(&re, "$1.$2");
+                    format!("WEBVTT\n\n{}", converted)
+                } else {
+                    text
+                };
+                let array = js_sys::Array::new();
+                array.push(&JsValue::from_str(&vtt_text));
+                let Ok(blob) = web_sys::Blob::new_with_str_sequence(&array) else { return; };
+                if let Ok(url) = web_sys::Url::create_object_url_with_blob(&blob) {
+                    let v = video();
+                    if let Ok(node) = document().create_element("track") {
+                        let _ = node.set_attribute("kind", "subtitles");
+                        let _ = node.set_attribute("label", &format!("ترجمة: {}", file_name));
+                        let _ = node.set_attribute("srclang", "ar");
+                        let _ = node.set_attribute("src", &url);
+                        let _ = node.set_attribute("default", "true");
+                        let _ = v.append_child(&node);
+                        if let Some(tracks) = v.text_tracks() {
+                            if let Some(last) = tracks.get(tracks.length() - 1) {
+                                last.set_mode(TextTrackMode::Showing);
+                            }
+                        }
+                        show("toggleSubtitlesBtn", true);
+                        sync_tool_states();
+                        pill(&format!("تم تحميل الترجمة: {}", file_name));
+                    }
+                }
+            }
+        }
+    }) as Box<dyn FnMut(Event)>);
+    reader.set_onload(Some(onload.as_ref().unchecked_ref()));
+    onload.forget();
+    let _ = reader.read_as_text(&file);
+}
 pub fn init_sub_drag_and_drop() {
     on("playerCanvas", "dragover", |event| {
         if let Ok(event) = event.dyn_into::<DragEvent>() {
@@ -2089,55 +2336,19 @@ pub fn init_sub_drag_and_drop() {
             event.prevent_default();
             let Some(dt) = event.data_transfer() else { return; };
             let Some(files) = dt.files() else { return; };
-            if files.length() == 0 { return; };
-            let Some(file) = files.item(0) else { return; };
-            let name = file.name();
-            let lower = name.to_lowercase();
-            if !lower.ends_with(".srt") && !lower.ends_with(".vtt") {
-                pill("يرجى إفلات ملف ترجمة بصيغة .srt أو .vtt");
-                return;
+            if let Some(file) = files.item(0) {
+                load_subtitle_file(file);
             }
-            let Ok(reader) = FileReader::new() else { return; };
-            let reader_clone = reader.clone();
-            let file_name = name.clone();
-            let is_srt = lower.ends_with(".srt");
-            let onload = Closure::wrap(Box::new(move |_: Event| {
-                if let Ok(result) = reader_clone.result() {
-                    if let Some(text) = result.as_string() {
-                        let vtt_text = if is_srt {
-                            let re = js_sys::RegExp::new(r"(\d{2}:\d{2}:\d{2}),(\d{3})", "g");
-                            let converted = js_sys::JsString::from(text.as_str()).replace_by_pattern(&re, "$1.$2");
-                            format!("WEBVTT\n\n{}", converted)
-                        } else {
-                            text
-                        };
-                        let array = js_sys::Array::new();
-                        array.push(&JsValue::from_str(&vtt_text));
-                        let Ok(blob) = web_sys::Blob::new_with_str_sequence(&array) else { return; };
-                        if let Ok(url) = web_sys::Url::create_object_url_with_blob(&blob) {
-                            let v = video();
-                            if let Ok(node) = document().create_element("track") {
-                                let _ = node.set_attribute("kind", "subtitles");
-                                let _ = node.set_attribute("label", &format!("ترجمة: {}", file_name));
-                                let _ = node.set_attribute("srclang", "ar");
-                                let _ = node.set_attribute("src", &url);
-                                let _ = node.set_attribute("default", "true");
-                                let _ = v.append_child(&node);
-                                if let Some(tracks) = v.text_tracks() {
-                                    if let Some(last) = tracks.get(tracks.length() - 1) {
-                                        last.set_mode(TextTrackMode::Showing);
-                                    }
-                                }
-                                show("toggleSubtitlesBtn", true);
-                                pill(&format!("تم تحميل الترجمة: {}", file_name));
-                            }
-                        }
-                    }
+        }
+    });
+    on("subFileInput", "change", |_| {
+        if let Ok(input) = el("subFileInput").dyn_into::<HtmlInputElement>() {
+            if let Some(files) = input.files() {
+                if let Some(file) = files.item(0) {
+                    load_subtitle_file(file);
                 }
-            }) as Box<dyn FnMut(Event)>);
-            reader.set_onload(Some(onload.as_ref().unchecked_ref()));
-            onload.forget();
-            let _ = reader.read_as_text(&file);
+            }
+            input.set_value("");
         }
     });
 }
@@ -2256,6 +2467,7 @@ pub fn toggle_subtitles() {
             track.set_mode(TextTrackMode::Showing);
         }
     }
+    sync_tool_states();
     pill(if showing {
         "الترجمة متوقفة"
     } else {
@@ -2270,6 +2482,7 @@ fn fullscreen() {
         let _ = el("appFrame").request_fullscreen();
         bridge("setLandscape", true.into());
     }
+    sync_tool_states();
 }
 fn pip() {
     let document: JsValue = document().into();
@@ -2288,6 +2501,18 @@ fn pip() {
         }
     }
 }
+fn apply_fit_mode(mode: &str) {
+    for name in ["contain", "cover", "fill"] {
+        class("playerCanvas", &format!("fit-{name}"), name == mode);
+    }
+    store("otium_fit_mode", mode);
+    sync_tool_states();
+    pill(match mode {
+        "cover" => "ملء الشاشة مع قص الأطراف",
+        "fill" => "تمدد الفيديو",
+        _ => "إظهار الفيديو بالكامل",
+    });
+}
 pub fn fit() {
     let previous = storage("otium_fit_mode").unwrap_or_else(|| "contain".into());
     let mode = match previous.as_str() {
@@ -2295,15 +2520,7 @@ pub fn fit() {
         "cover" => "fill",
         _ => "contain",
     };
-    for name in ["contain", "cover", "fill"] {
-        class("playerCanvas", &format!("fit-{name}"), name == mode);
-    }
-    store("otium_fit_mode", mode);
-    pill(match mode {
-        "cover" => "ملء الشاشة مع قص الأطراف",
-        "fill" => "تمدد الفيديو",
-        _ => "إظهار الفيديو بالكامل",
-    });
+    apply_fit_mode(mode);
 }
 pub fn controls_help() {
     let rows = [
@@ -2428,6 +2645,69 @@ fn action(row: Element) {
                 }
                 app::close_sheet();
             }
+        }
+        "speed" => {
+            if let Ok(rate) = row.get_attribute("data-rate").unwrap_or_default().parse::<f64>() {
+                set_speed(rate);
+                open_tools_sheet();
+            }
+        }
+        "boost" => {
+            if let Ok(val) = row.get_attribute("data-boost").unwrap_or_default().parse::<f64>() {
+                set_boost(val);
+                open_tools_sheet();
+            }
+        }
+        "fit-mode" => {
+            let mode = row.get_attribute("data-mode").unwrap_or_else(|| "contain".into());
+            apply_fit_mode(&mode);
+            open_tools_sheet();
+        }
+        "filter-preset" => {
+            let fid = row.get_attribute("data-filter").unwrap_or_else(|| "normal".into());
+            if let Some((id, label, css)) = FILTERS.iter().find(|(id, _, _)| *id == fid) {
+                store("zoet_video_filter", id);
+                apply_video_filter(css);
+                sync_tool_states();
+                pill(&format!("فلتر الصورة: {label}"));
+                open_tools_sheet();
+            }
+        }
+        "sub-toggle" => {
+            toggle_subtitles();
+        }
+        "sub-delay" => {
+            if let Ok(delta) = row.get_attribute("data-delta").unwrap_or_default().parse::<f64>() {
+                adjust_sub_delay(delta);
+                open_tools_sheet();
+            }
+        }
+        "sub-delay-reset" => {
+            reset_sub_delay();
+            open_tools_sheet();
+        }
+        "sub-import" => {
+            app::close_sheet();
+            let _ = el("subFileInput").dyn_into::<HtmlElement>().map(|i| i.click());
+        }
+        "lock-touch" => {
+            let locked = STATE.with(|c| c.borrow().locked);
+            set_touch_locked(!locked);
+        }
+        "snapshot" => {
+            app::close_sheet();
+            take_snapshot();
+        }
+        "toggle-pip" => {
+            app::close_sheet();
+            pip();
+        }
+        "toggle-theater" => {
+            app::close_sheet();
+            toggle_theater();
+        }
+        "controls-help" => {
+            controls_help();
         }
         _ => {}
     }
@@ -2631,19 +2911,33 @@ fn gestures() {
         if STATE.with(|c| c.borrow().embedded.is_some()) {
             return;
         }
+        if STATE.with(|c| c.borrow().locked) {
+            reveal_unlock_pill();
+            return;
+        }
         let v = video();
+        let rect = el("gesturesLayer").get_bounding_client_rect();
+        let x = event.client_x() as f64;
+        let is_right = x - rect.left() >= rect.width() / 2.;
+        let start_val = if is_right {
+            STATE.with(|c| c.borrow().boost_volume)
+        } else {
+            STATE.with(|c| c.borrow().brightness)
+        };
         let gesture = Gesture {
-            x: event.client_x() as f64,
+            x,
             y: event.client_y() as f64,
             at: now(),
             moved: false,
             hold: false,
             previous_rate: v.playback_rate(),
+            swipe_mode: 0,
+            swipe_start_val: start_val,
         };
         let hold = Timeout::new(350, || {
             let enable = STATE.with(|c| {
                 let mut p = c.borrow_mut();
-                if p.gesture.moved || video().paused() {
+                if p.gesture.moved || p.locked || video().paused() {
                     return false;
                 }
                 p.gesture.hold = true;
@@ -2669,14 +2963,41 @@ fn gestures() {
             return;
         }
         let gesture = STATE.with(|c| c.borrow().gesture.clone());
+        if gesture.hold {
+            return;
+        }
         let dx = event.client_x() as f64 - gesture.x;
         let dy = event.client_y() as f64 - gesture.y;
-        if dx.abs() > 10. || dy.abs() > 10. {
+        let mut swipe_mode = gesture.swipe_mode;
+        if swipe_mode == 0 && (dx.abs() > 10. || dy.abs() > 10.) {
+            if dy.abs() > 14. && dy.abs() > dx.abs() * 1.35 {
+                let rect = el("gesturesLayer").get_bounding_client_rect();
+                swipe_mode = if gesture.x - rect.left() >= rect.width() / 2. {
+                    1
+                } else {
+                    2
+                };
+            }
             STATE.with(|c| {
                 let mut p = c.borrow_mut();
                 p.gesture.moved = true;
+                p.gesture.swipe_mode = swipe_mode;
                 p.hold = None;
             });
+        }
+        if swipe_mode == 1 {
+            let delta = (-dy / 160.).clamp(-1.0, 1.0);
+            let target = (gesture.swipe_start_val + delta).clamp(0., 1.0);
+            let v = video();
+            v.set_muted(false);
+            v.set_volume(target);
+            STATE.with(|c| c.borrow_mut().boost_volume = target);
+            pill(&format!("الصوت {:.0}%", target * 100.));
+        } else if swipe_mode == 2 {
+            let delta = (-dy / 160.).clamp(-0.75, 0.75);
+            let target = (gesture.swipe_start_val + delta).clamp(0.25, 1.0);
+            apply_brightness(target);
+            pill(&format!("الإضاءة {:.0}%", target * 100.));
         }
     });
     for name in ["pointerup", "pointercancel"] {
@@ -2696,7 +3017,7 @@ fn gestures() {
                 show("speed2xPill", false);
                 return;
             }
-            if cancel || gesture.moved {
+            if cancel || gesture.moved || STATE.with(|c| c.borrow().locked) {
                 return;
             }
 
@@ -2761,6 +3082,9 @@ pub fn init() {
     on("toggleFullscreenBtn", "click", |_| fullscreen());
     on("togglePipBtn", "click", |_| pip());
     on("toggleAspectRatioBtn", "click", |_| fit());
+    on("playerMoreToolsBtn", "click", |_| open_tools_sheet());
+    on("unlockTouchBtn", "click", |_| set_touch_locked(false));
+    listen(document().as_ref(), "fullscreenchange", |_| sync_tool_states());
     on("playerFavBtn", "click", |_| {
         if let Some(ep) = current_episode() {
             app::toggle_favorite(&ep);
@@ -2906,4 +3230,5 @@ pub fn init() {
     if let Some((_, _, hex)) = SUB_COLORS.iter().find(|(id, _, _)| id == &sub_color) {
         apply_sub_color(hex);
     }
+    sync_tool_states();
 }

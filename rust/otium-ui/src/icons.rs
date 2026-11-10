@@ -31,3 +31,11 @@ pub const GAMEPAD: &str = r#"<svg class="z-ico" viewBox="0 0 24 24" fill="none" 
 pub const EMPTY_BOOKMARK: &str = r#"<svg class="z-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 4.25A2.25 2.25 0 0 1 8.75 2h6.5a2.25 2.25 0 0 1 2.25 2.25v17.25l-5.5-3.6-5.5 3.6V4.25Z"/></svg>"#;
 
 pub const STAR: &str = r#"<svg class="z-ico-xs" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2.8 2.7 5.6 6.2.85-4.5 4.35 1.1 6.15L12 16.8l-5.5 2.95 1.1-6.15L3.1 9.25l6.2-.85L12 2.8Z"/></svg>"#;
+
+pub const LOCK: &str = r#"<svg class="z-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10" rx="2.2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg>"#;
+
+pub const FULLSCREEN_ENTER: &str = r#"<svg class="z-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 4H4v4.5M15.5 4H20v4.5M8.5 20H4v-4.5M15.5 20H20v-4.5"/></svg>"#;
+
+pub const FULLSCREEN_EXIT: &str = r#"<svg class="z-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8.5h4.5V4M20 8.5h-4.5V4M4 15.5h4.5V20M20 15.5h-4.5V20"/></svg>"#;
+
+pub const CAMERA: &str = r#"<svg class="z-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8.5A2 2 0 0 1 6 6.5h2l1.6-2h4.8l1.6 2H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9Z"/><circle cx="12" cy="13" r="3.2"/></svg>"#;
