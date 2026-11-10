@@ -1987,20 +1987,36 @@ fn check_updates(manual: bool) {
                     if manual {
                         notify("أنت تستخدم آخر إصدار");
                     }
-                } else if let Some(url) = data["assets"]
-                    .as_array()
-                    .and_then(|rows| rows.iter().find(|v| s(v, "name").ends_with(".apk")))
-                    .map(|v| s(v, "browser_download_url"))
-                {
-                    open_sheet(
-                        "تحديث التطبيق",
-                        &format!(
-                            "<p>{}</p><p class=\"changelog-container\">{}</p><button class=\"load-more-btn\" data-action=\"download\" data-url=\"{}\">تنزيل وتثبيت التحديث الآن</button>",
-                            esc(&version),
-                            esc(&s(&data, "body")),
-                            esc(&url)
-                        ),
-                    );
+                } else {
+                    let ua = window()
+                        .navigator()
+                        .user_agent()
+                        .unwrap_or_default()
+                        .to_ascii_lowercase();
+                    let ext = if ua.contains("windows") && !ua.contains("android") {
+                        ".exe"
+                    } else {
+                        ".apk"
+                    };
+                    let url = data["assets"]
+                        .as_array()
+                        .and_then(|rows| {
+                            rows.iter()
+                                .find(|v| s(v, "name").ends_with(ext))
+                                .or_else(|| rows.iter().find(|v| s(v, "name").ends_with(".apk")))
+                        })
+                        .map(|v| s(v, "browser_download_url"));
+                    if let Some(url) = url {
+                        open_sheet(
+                            "تحديث التطبيق",
+                            &format!(
+                                "<p>{}</p><p class=\"changelog-container\">{}</p><button class=\"load-more-btn\" data-action=\"download\" data-url=\"{}\">تنزيل وتثبيت التحديث الآن</button>",
+                                esc(&version),
+                                esc(&s(&data, "body")),
+                                esc(&url)
+                            ),
+                        );
+                    }
                 }
             }
             _ => {

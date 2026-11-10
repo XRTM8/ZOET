@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="preload" href="fonts/tajawal-5.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="fonts/tajawal.css">
-  <link rel="stylesheet" href="styles.css?v=2.9.4">
+  <link rel="stylesheet" href="styles.css?v=2.9.5">
 </head>
 <body>
 <div class="app-frame" id="appFrame">
@@ -236,7 +236,7 @@
               </span>
               <div>
                 <h3>إصدار ZOET</h3>
-                <p id="installedVersionText">v2.9.4</p>
+                <p id="installedVersionText">v2.9.5</p>
               </div>
             </div>
             <button class="check-update-btn" id="manualCheckUpdateBtn">
@@ -448,17 +448,6 @@
     <input type="file" id="subFileInput" accept=".srt,.vtt,text/vtt" class="hidden">
 
     <div class="player-sub-drawer">
-      <div class="drawer-server-bar" id="drawerServerBar">
-        <div class="drawer-server-info">
-          <span class="d-label">المشغل</span>
-          <span class="d-val" id="drawerActiveServerName">تلقائي</span>
-        </div>
-        <button class="drawer-switch-server-btn" id="drawerOpenServersBtn">
-          <svg class="z-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4" width="17" height="6.5" rx="2"/><rect x="3.5" y="13.5" width="17" height="6.5" rx="2"/></svg>
-          <span>تغيير</span>
-        </button>
-      </div>
-
       <div class="drawer-topline">
         <span class="drawer-heading">الحلقات</span>
         <span class="drawer-badge" id="drawerCount">0 حلقة</span>
@@ -599,8 +588,8 @@
 </script>
 <script src="vendor/hls/hls.min.js" defer></script>
 <script type="module">
-import init from './wasm/otium_ui.js?v=2.9.4';
-init({ module_or_path: './wasm/otium_ui_bg.wasm?v=2.9.4' }).catch(() => { document.getElementById('bootStatus').textContent = 'تعذّر تشغيل التطبيق. أعد فتحه أو تحديث المتصفح.'; });
+import init from './wasm/otium_ui.js?v=2.9.5';
+init({ module_or_path: './wasm/otium_ui_bg.wasm?v=2.9.5' }).catch(() => { document.getElementById('bootStatus').textContent = 'تعذّر تشغيل التطبيق. أعد فتحه أو تحديث المتصفح.'; });
 </script>
 </body>
 </html>

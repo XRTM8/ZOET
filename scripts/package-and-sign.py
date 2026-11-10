@@ -8,8 +8,8 @@ from cryptography.hazmat.primitives.serialization import pkcs12, Encoding, Publi
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
 
-VERSION_NAME = '2.9.4'
-VERSION_CODE = 30
+VERSION_NAME = '2.9.5'
+VERSION_CODE = 31
 
 def main():
     print(f"=== ZOET v{VERSION_NAME} APK Packager & Signer (Strict Android Alignment & v2 Spec) ===")

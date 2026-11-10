@@ -11,8 +11,6 @@ import android.content.pm.ActivityInfo
 import android.content.pm.ApplicationInfo
 import android.content.res.Configuration
 import android.graphics.Color
-import android.media.AudioAttributes
-import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.session.MediaSession
@@ -48,8 +46,8 @@ class MainActivity : AppCompatActivity() {
     private companion object {
         const val TAG = "KrmziMainActivity"
         const val APP_URL = "https://appassets.androidplatform.net/assets/public/index.html"
-        const val FALLBACK_VERSION_NAME = "2.9.4"
-        const val FALLBACK_VERSION_CODE = 30L
+        const val FALLBACK_VERSION_NAME = "2.9.5"
+        const val FALLBACK_VERSION_CODE = 31L
     }
 
     private lateinit var webView: WebView
@@ -61,8 +59,6 @@ class MainActivity : AppCompatActivity() {
     private var isDestroyed = false
     private var appChromeClient: WebChromeClient? = null
     private var mediaSession: MediaSession? = null
-    private var audioManager: AudioManager? = null
-    private var audioFocusRequest: AudioFocusRequest? = null
     private var isNoisyReceiverRegistered = false
     private val noisyReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -477,7 +473,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupMediaSession() {
         try {
-            audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
             mediaSession = MediaSession(this, "ZOET_Playback").apply {
                 @Suppress("DEPRECATION")
                 setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS)
@@ -514,66 +509,6 @@ class MainActivity : AppCompatActivity() {
             }
         } catch (e: Exception) {
             Log.w(TAG, "MediaSession setup failed: ${e.message}")
-        }
-    }
-
-    private fun requestPlaybackAudioFocus(): Boolean {
-        val am = audioManager ?: return false
-        return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val playbackAttributes = AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE)
-                    .build()
-                val afr = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-                    .setAudioAttributes(playbackAttributes)
-                    .setAcceptsDelayedFocusGain(false)
-                    .setOnAudioFocusChangeListener { focusChange ->
-                        if (focusChange == AudioManager.AUDIOFOCUS_LOSS) {
-                            runOnUiThread {
-                                if (isVideoPlaying && ::webView.isInitialized) {
-                                    webView.evaluateJavascript("if (window.zoetTogglePlayer) { if (!document.getElementById('nativePlayer')?.paused) window.zoetTogglePlayer(); }", null)
-                                }
-                            }
-                        }
-                    }
-                    .build()
-                audioFocusRequest = afr
-                am.requestAudioFocus(afr) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
-            } else {
-                @Suppress("DEPRECATION")
-                am.requestAudioFocus(
-                    { focusChange ->
-                        if (focusChange == AudioManager.AUDIOFOCUS_LOSS) {
-                            runOnUiThread {
-                                if (isVideoPlaying && ::webView.isInitialized) {
-                                    webView.evaluateJavascript("if (window.zoetTogglePlayer) { if (!document.getElementById('nativePlayer')?.paused) window.zoetTogglePlayer(); }", null)
-                                }
-                            }
-                        }
-                    },
-                    AudioManager.STREAM_MUSIC,
-                    AudioManager.AUDIOFOCUS_GAIN
-                ) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Audio focus request failed: ${e.message}")
-            false
-        }
-    }
-
-    private fun abandonPlaybackAudioFocus() {
-        val am = audioManager ?: return
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                audioFocusRequest?.let { am.abandonAudioFocusRequest(it) }
-                audioFocusRequest = null
-            } else {
-                @Suppress("DEPRECATION")
-                am.abandonAudioFocus(null)
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Abandon audio focus failed: ${e.message}")
         }
     }
 

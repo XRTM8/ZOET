@@ -286,6 +286,7 @@ fn release_media() {
     let _ = v.remove_attribute("src");
     let _ = v.remove_attribute("poster");
     v.load();
+    detach_audio_boost(false);
     let frame = el("embedPlayer");
     let _ = Reflect::set(frame.as_ref(), &"onload".into(), &JsValue::NULL);
     let _ = Reflect::set(frame.as_ref(), &"onerror".into(), &JsValue::NULL);
@@ -662,9 +663,7 @@ fn start_attempt() {
     let source = current_episode()
         .map(|ep| catalogue::provider(&ep).to_string())
         .unwrap_or_default();
-    let s_name = source_name(&source);
-    text("activeServerLabel", s_name);
-    text("drawerActiveServerName", &format!("{s_name} · مباشر"));
+    text("activeServerLabel", source_name(&source));
     text("activeQualityLabel", &s(&selected, "quality"));
     v.set_preload("auto");
     v.set_volume(settings.volume.clamp(0., 1.));
@@ -983,7 +982,6 @@ fn play_embed(server: Value) {
             p.rollback = None;
         });
         text("activeServerLabel", &s(&server, "name"));
-        text("drawerActiveServerName", &s(&server, "name"));
         text("activeQualityLabel", "من السيرفر");
         pill("السيرفر الخارجي يتحكم بموضع المشاهدة");
         show_hud(false);
@@ -1987,29 +1985,102 @@ fn apply_brightness(level: f64) {
     let dim = (1.0 - level).clamp(0.0, 0.75);
     style("playerBrightnessOverlay", "opacity", &format!("{dim:.3}"));
 }
+fn is_audio_boost_supported(v: &HtmlVideoElement) -> bool {
+    if STATE.with(|c| c.borrow().embedded.is_some()) {
+        return false;
+    }
+    let mut src = v.current_src();
+    if src.is_empty() {
+        src = v.get_attribute("src").unwrap_or_default();
+    }
+    if src.is_empty() {
+        return false;
+    }
+    if src.starts_with("blob:") || src.starts_with('/') {
+        return true;
+    }
+    let origin = window().location().origin().unwrap_or_default();
+    !origin.is_empty() && src.starts_with(&origin)
+}
+fn detach_audio_boost(resume_playback: bool) {
+    let ctx = STATE.with(|c| {
+        let mut p = c.borrow_mut();
+        p.gain_node = None;
+        p.boost_volume = 1.0;
+        p.audio_context.take()
+    });
+    let Some(ctx) = ctx else {
+        return;
+    };
+    let snap = if resume_playback {
+        Some((
+            snapshot(),
+            STATE.with(|c| c.borrow().stream_index),
+            current_episode(),
+            STATE.with(|c| c.borrow().embedded.is_none()),
+        ))
+    } else {
+        None
+    };
+    if resume_playback {
+        stop_hls();
+    }
+    let _ = ctx.close();
+    let old_v = el("nativePlayer");
+    let was_hidden = old_v.class_list().contains("hidden");
+    let inline_filter = storage("zoet_video_filter").unwrap_or_else(|| "normal".into());
+    if let Ok(new_el) = document().create_element("video") {
+        let _ = new_el.set_attribute("id", "nativePlayer");
+        let _ = new_el.set_attribute("playsinline", "");
+        let _ = new_el.set_attribute("webkit-playsinline", "");
+        let _ = new_el.set_attribute("preload", "none");
+        let _ = new_el.set_attribute("referrerpolicy", "no-referrer");
+        let _ = new_el.set_attribute(
+            "class",
+            if was_hidden { "video-elem hidden" } else { "video-elem" },
+        );
+        let _ = old_v.replace_with_with_node_1(&new_el);
+        if let Some((_, _, css)) = FILTERS.iter().find(|(id, _, _)| id == &inline_filter) {
+            apply_video_filter(css);
+        }
+        let sub_color = storage("zoet_sub_color").unwrap_or_else(|| "yellow".into());
+        if let Some((_, _, hex)) = SUB_COLORS.iter().find(|(id, _, _)| id == &sub_color) {
+            apply_sub_color(hex);
+        }
+        bind_video_events();
+    }
+    if let Some((snap, idx, Some(ep), true)) = snap {
+        subtitles(&ep);
+        play_direct(Some(idx), snap, false);
+    }
+}
 fn set_boost(target: f64) {
     let target = target.clamp(0., 3.0);
-    let v = video();
-    STATE.with(|c| c.borrow_mut().boost_volume = target);
-    v.set_muted(false);
     if target <= 1.0 {
+        detach_audio_boost(true);
+        let v = video();
+        STATE.with(|c| c.borrow_mut().boost_volume = target);
+        v.set_muted(false);
         v.set_volume(target);
-        STATE.with(|c| {
-            if let Some(gain) = &c.borrow().gain_node {
-                gain.gain().set_value(1.0);
-            }
-        });
         pill(&format!("الصوت {:.0}%", target * 100.));
-    } else {
-        v.set_volume(1.0);
-        ensure_audio_boost(&v);
-        STATE.with(|c| {
-            if let Some(gain) = &c.borrow().gain_node {
-                gain.gain().set_value(target as f32);
-            }
-        });
-        pill(&format!("مضخم الصوت: {:.0}%", target * 100.));
+        return;
     }
+    let v = video();
+    v.set_muted(false);
+    v.set_volume(1.0);
+    if !ensure_audio_boost(&v) {
+        STATE.with(|c| c.borrow_mut().boost_volume = 1.0);
+        pill("مضخم الصوت يدعم بث HLS الموحد فقط (أقصى صوت 100%)");
+        return;
+    }
+    STATE.with(|c| {
+        let mut p = c.borrow_mut();
+        if let Some(gain) = &p.gain_node {
+            gain.gain().set_value(target as f32);
+            p.boost_volume = target;
+        }
+    });
+    pill(&format!("مضخم الصوت: {:.0}%", target * 100.));
 }
 fn set_speed(rate: f64) {
     let rate = rate.clamp(0.5, 2.0);
@@ -2071,14 +2142,20 @@ pub fn open_tools_sheet() {
     html.push_str("</div>");
 
     html.push_str("<div class=\"sheet-sub-title\">مضخّم الصوت</div><div class=\"sheet-chip-grid\">");
+    let boost_ok = is_audio_boost_supported(&v);
     for (val, label) in [(1.0, "100%"), (1.5, "150%"), (2.0, "200%"), (3.0, "300%")] {
         let active = (cur_boost - val).abs() < 0.12;
+        let disabled = val > 1.0 && !boost_ok;
         html.push_str(&format!(
-            "<button class=\"sheet-chip-btn {}\" data-player-action=\"boost\" data-boost=\"{val}\">{label}</button>",
-            if active { "active" } else { "" }
+            "<button class=\"sheet-chip-btn {}\" data-player-action=\"boost\" data-boost=\"{val}\" {}>{label}</button>",
+            if active { "active" } else { "" },
+            if disabled { "disabled" } else { "" }
         ));
     }
     html.push_str("</div>");
+    if !boost_ok {
+        html.push_str("<p class=\"tools-note\">مضخم الصوت فوق 100% يعمل مع البث الموحد (HLS) فقط للحفاظ على استقرار الصوت.</p>");
+    }
 
     html.push_str("<div class=\"sheet-sub-title\">أبعاد العرض</div><div class=\"sheet-chip-grid\">");
     for (mode, label) in [("contain", "الإطار الكامل"), ("cover", "ملء الشاشة"), ("fill", "تمدد")] {
@@ -2131,24 +2208,46 @@ pub fn open_tools_sheet() {
     html.push_str("</div>");
     app::open_sheet("أدوات المشغل", &html);
 }
-fn ensure_audio_boost(v: &HtmlVideoElement) {
-    let connected = STATE.with(|c| c.borrow().gain_node.is_some());
-    if connected {
-        return;
+fn ensure_audio_boost(v: &HtmlVideoElement) -> bool {
+    if !is_audio_boost_supported(v) {
+        return false;
     }
-    if let Ok(ctx) = AudioContext::new() {
-        if let Ok(source) = ctx.create_media_element_source(v) {
-            if let Ok(gain) = ctx.create_gain() {
-                let _ = source.connect_with_audio_node(&gain);
-                let _ = gain.connect_with_audio_node(&ctx.destination());
-                STATE.with(|c| {
-                    let mut p = c.borrow_mut();
-                    p.audio_context = Some(ctx);
-                    p.gain_node = Some(gain);
-                });
-            }
+    let existing = STATE.with(|c| {
+        let p = c.borrow();
+        if p.gain_node.is_some() {
+            p.audio_context.clone()
+        } else {
+            None
         }
+    });
+    if let Some(ctx) = existing {
+        let _ = ctx.resume();
+        return true;
     }
+    let Ok(ctx) = AudioContext::new() else {
+        return false;
+    };
+    let _ = ctx.resume();
+    let Ok(source) = ctx.create_media_element_source(v) else {
+        let _ = ctx.close();
+        return false;
+    };
+    let Ok(gain) = ctx.create_gain() else {
+        let _ = ctx.close();
+        return false;
+    };
+    if source.connect_with_audio_node(&gain).is_err()
+        || gain.connect_with_audio_node(&ctx.destination()).is_err()
+    {
+        let _ = ctx.close();
+        return false;
+    }
+    STATE.with(|c| {
+        let mut p = c.borrow_mut();
+        p.audio_context = Some(ctx);
+        p.gain_node = Some(gain);
+    });
+    true
 }
 pub fn adjust_volume(delta: f64) {
     let current = STATE.with(|c| c.borrow().boost_volume);
@@ -3056,51 +3155,7 @@ fn gestures() {
         });
     }
 }
-pub fn init() {
-    on("dismissPlayerBtn", "click", |_| close());
-    on("centerPlay", "click", |_| toggle());
-    on("centerRewind", "click", |_| {
-        seek(-10.);
-        show_hud(true);
-    });
-    on("centerForward", "click", |_| {
-        seek(10.);
-        show_hud(true);
-    });
-    on("skipIntroBtn", "click", |_| {
-        seek(85.);
-        show("skipIntroBtn", false);
-    });
-    on("openServersSheetBtn", "click", |_| open_sources());
-    on("drawerOpenServersBtn", "click", |_| open_sources());
-    on("openQualitySheetBtn", "click", |_| open_quality());
-    on("openEpisodesSheetBtn", "click", |_| all_episodes());
-    on("toggleSubtitlesBtn", "click", |_| toggle_subtitles());
-    on("takeSnapshotBtn", "click", |_| take_snapshot());
-    on("toggleVideoFilterBtn", "click", |_| cycle_video_filter());
-    on("toggleTheaterBtn", "click", |_| toggle_theater());
-    on("toggleFullscreenBtn", "click", |_| fullscreen());
-    on("togglePipBtn", "click", |_| pip());
-    on("toggleAspectRatioBtn", "click", |_| fit());
-    on("playerMoreToolsBtn", "click", |_| open_tools_sheet());
-    on("unlockTouchBtn", "click", |_| set_touch_locked(false));
-    listen(document().as_ref(), "fullscreenchange", |_| sync_tool_states());
-    on("playerFavBtn", "click", |_| {
-        if let Some(ep) = current_episode() {
-            app::toggle_favorite(&ep);
-            title_ui(&ep);
-        }
-    });
-    on("drawerEpisodeSearch", "input", |_| render_drawer());
-    on("autoNextPlayBtn", "click", |_| next_episode());
-    on("autoNextCancelBtn", "click", |_| {
-        STATE.with(|c| {
-            let mut p = c.borrow_mut();
-            p.next_deadline = None;
-            p.next_cancelled = true;
-        });
-        show("autoNextCard", false);
-    });
+fn bind_video_events() {
     on("nativePlayer", "loadedmetadata", |_| {
         if is_open() {
             metadata();
@@ -3141,6 +3196,52 @@ pub fn init() {
             loading("جاري تحميل الفيديو…");
         }
     });
+}
+pub fn init() {
+    on("dismissPlayerBtn", "click", |_| close());
+    on("centerPlay", "click", |_| toggle());
+    on("centerRewind", "click", |_| {
+        seek(-10.);
+        show_hud(true);
+    });
+    on("centerForward", "click", |_| {
+        seek(10.);
+        show_hud(true);
+    });
+    on("skipIntroBtn", "click", |_| {
+        seek(85.);
+        show("skipIntroBtn", false);
+    });
+    on("openServersSheetBtn", "click", |_| open_sources());
+    on("openQualitySheetBtn", "click", |_| open_quality());
+    on("openEpisodesSheetBtn", "click", |_| all_episodes());
+    on("toggleSubtitlesBtn", "click", |_| toggle_subtitles());
+    on("takeSnapshotBtn", "click", |_| take_snapshot());
+    on("toggleVideoFilterBtn", "click", |_| cycle_video_filter());
+    on("toggleTheaterBtn", "click", |_| toggle_theater());
+    on("toggleFullscreenBtn", "click", |_| fullscreen());
+    on("togglePipBtn", "click", |_| pip());
+    on("toggleAspectRatioBtn", "click", |_| fit());
+    on("playerMoreToolsBtn", "click", |_| open_tools_sheet());
+    on("unlockTouchBtn", "click", |_| set_touch_locked(false));
+    listen(document().as_ref(), "fullscreenchange", |_| sync_tool_states());
+    on("playerFavBtn", "click", |_| {
+        if let Some(ep) = current_episode() {
+            app::toggle_favorite(&ep);
+            title_ui(&ep);
+        }
+    });
+    on("drawerEpisodeSearch", "input", |_| render_drawer());
+    on("autoNextPlayBtn", "click", |_| next_episode());
+    on("autoNextCancelBtn", "click", |_| {
+        STATE.with(|c| {
+            let mut p = c.borrow_mut();
+            p.next_deadline = None;
+            p.next_cancelled = true;
+        });
+        show("autoNextCard", false);
+    });
+    bind_video_events();
     on("timelineBar", "pointerdown", |event| {
         if let Ok(event) = event.dyn_into::<PointerEvent>() {
             event.prevent_default();
