@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="preload" href="fonts/tajawal-5.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="fonts/tajawal.css">
-  <link rel="stylesheet" href="styles.css?v=2.9.1">
+  <link rel="stylesheet" href="styles.css?v=2.9.2">
 </head>
 <body>
 <div class="app-frame" id="appFrame">
@@ -64,6 +64,7 @@
         <h1 id="catalogueTitle">المسلسلات</h1>
         <span id="seriesCountSub" class="headline-muted"></span>
       </div>
+      <div id="continueStrip" class="continue-strip hidden"></div>
       <div class="media-grid" id="seriesGrid"></div>
       <div class="catalogue-pagination">
         <p id="cataloguePageStatus" role="status"></p>
@@ -216,7 +217,7 @@
               </span>
               <div>
                 <h3>إصدار ZOET</h3>
-                <p id="installedVersionText">v2.9.1</p>
+                <p id="installedVersionText">v2.9.2</p>
               </div>
             </div>
             <button class="check-update-btn" id="manualCheckUpdateBtn">
@@ -501,12 +502,26 @@
 
       if (canvas && seriesBtn) {
         let scrollPending = false;
+        let lastScrollTop = 0;
+        const dockWrap = document.getElementById('floatingDockWrap');
         canvas.addEventListener('scroll', () => {
           if (scrollPending) return;
           scrollPending = true;
           requestAnimationFrame(() => {
             scrollPending = false;
-            if (canvas.scrollHeight - canvas.scrollTop - canvas.clientHeight < 350) {
+            const curTop = canvas.scrollTop;
+            const remaining = canvas.scrollHeight - curTop - canvas.clientHeight;
+            if (dockWrap && window.innerWidth < 620) {
+              const view = document.documentElement.getAttribute('data-view');
+              const inCatalog = view === 'series' || view === 'movies';
+              if (!inCatalog || curTop < 60 || remaining < 160 || curTop - lastScrollTop < -8) {
+                dockWrap.classList.remove('dock-scroll-hidden');
+              } else if (curTop > 140 && curTop - lastScrollTop > 12) {
+                dockWrap.classList.add('dock-scroll-hidden');
+              }
+            }
+            lastScrollTop = curTop;
+            if (remaining < 350) {
               checkAndTrigger(seriesBtn);
             }
           });
@@ -555,8 +570,8 @@
 </script>
 <script src="vendor/hls/hls.min.js" defer></script>
 <script type="module">
-import init from './wasm/otium_ui.js?v=2.9.1';
-init({ module_or_path: './wasm/otium_ui_bg.wasm?v=2.9.1' }).catch(() => { document.getElementById('bootStatus').textContent = 'تعذّر تشغيل التطبيق. أعد فتحه أو تحديث المتصفح.'; });
+import init from './wasm/otium_ui.js?v=2.9.2';
+init({ module_or_path: './wasm/otium_ui_bg.wasm?v=2.9.2' }).catch(() => { document.getElementById('bootStatus').textContent = 'تعذّر تشغيل التطبيق. أعد فتحه أو تحديث المتصفح.'; });
 </script>
 </body>
 </html>

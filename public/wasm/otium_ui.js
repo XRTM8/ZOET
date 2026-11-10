@@ -764,6 +764,9 @@ function __wbg_get_imports() {
         __wbg_removeEventListener_4e20bd5fac3de092: function() { return handleError(function (arg0, arg1, arg2, arg3) {
             arg0.removeEventListener(getStringFromWasm0(arg1, arg2), arg3);
         }, arguments); },
+        __wbg_remove_12e9b1deffec7d2f: function() { return handleError(function (arg0, arg1, arg2) {
+            arg0.remove(getStringFromWasm0(arg1, arg2));
+        }, arguments); },
         __wbg_remove_8228e91d7ddbc755: function(arg0) {
             arg0.remove();
         },

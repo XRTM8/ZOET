@@ -198,6 +198,65 @@ pub fn save_player_history(item: &Value, time: f64, duration: f64) {
             &serde_json::to_string(&state.history).unwrap_or_default(),
         );
     });
+    render_continue_strip();
+}
+fn format_clock(seconds: f64) -> String {
+    let total = seconds.max(0.) as u64;
+    let h = total / 3600;
+    let m = (total % 3600) / 60;
+    let s = total % 60;
+    if h > 0 {
+        format!("{h}:{m:02}:{s:02}")
+    } else {
+        format!("{m}:{s:02}")
+    }
+}
+fn render_continue_strip() {
+    let Some(container) = document().get_element_by_id("continueStrip") else {
+        return;
+    };
+    let (visible, html_markup) = STATE.with(|state| {
+        let state = state.borrow();
+        if state.view != "series" || state.history.is_empty() {
+            return (false, String::new());
+        }
+        let item = &state.history[0];
+        let url = s(item, "url");
+        if url.is_empty() {
+            return (false, String::new());
+        }
+        let title = s(item, "title");
+        let t = item["currentTime"].as_f64().unwrap_or(0.);
+        let d = item["duration"].as_f64().unwrap_or(0.);
+        let pct = if d > 10. {
+            ((t / d) * 100.).clamp(2., 100.) as u32
+        } else {
+            0
+        };
+        let time_label = if t >= 10. {
+            format!("<span class=\"continue-time\">{}</span>", format_clock(t))
+        } else {
+            String::new()
+        };
+        let bar = if pct > 0 {
+            format!("<span class=\"continue-progress\"><span style=\"width:{pct}%\"></span></span>")
+        } else {
+            String::new()
+        };
+        let markup = format!(
+            "<button class=\"continue-pill\" data-action=\"episode\" data-url=\"{}\">\
+                <span class=\"continue-play\">{}</span>\
+                <span class=\"continue-copy\"><strong>متابعة المشاهدة</strong><small>{}</small></span>\
+                {time_label}{bar}\
+            </button>",
+            esc(&url),
+            icons::PLAY,
+            esc(&title),
+        );
+        (true, markup)
+    });
+    let _ = container.class_list().toggle_with_force("hidden", !visible);
+    container.set_inner_html(&html_markup);
 }
 pub fn is_favorite(item: &Value) -> bool {
     STATE.with(|state| {
@@ -316,7 +375,7 @@ fn card(item: &Value) -> String {
     } else if is_dubbed {
         format!("<span class=\"edition-badge edition-dubbed\">{} مدبلج</span>", icons::DUBBED)
     } else {
-        format!("<span class=\"edition-badge edition-subbed\">{} مترجم</span>", icons::SUBTITLES)
+        String::new()
     };
     let badges = sources
         .iter()
@@ -336,7 +395,7 @@ fn card(item: &Value) -> String {
         (true, false) => format!("<span class=\"tile-rate\">{} {}</span>", icons::STAR, esc(&rating)),
         (true, true) => String::new(),
     };
-    format!("<button class=\"series-tile\" data-action=\"{kind}\" data-url=\"{}\"><span class=\"poster-frame\"><img class=\"series-tile-thumb\" src=\"{}\" alt=\"\" loading=\"lazy\" decoding=\"async\" referrerpolicy=\"no-referrer\">{edition_badge}</span><span class=\"series-tile-body\"><span class=\"series-tile-title\">{}</span><span class=\"series-tile-sub\">{meta}</span><span class=\"catalogue-sources\">{badges}</span></span></button>",esc(&s(item,"url")),esc(&thumbnail),esc(&title))
+    format!("<button class=\"series-tile\" data-action=\"{kind}\" data-url=\"{}\"><span class=\"poster-frame\"><img class=\"series-tile-thumb\" src=\"{}\" alt=\"\" loading=\"lazy\" decoding=\"async\" referrerpolicy=\"no-referrer\">{edition_badge}</span><span class=\"series-tile-body\"><span class=\"series-tile-title\">{}</span><span class=\"series-tile-meta\"><span class=\"series-tile-sub\">{meta}</span><span class=\"catalogue-sources\">{badges}</span></span></span></button>",esc(&s(item,"url")),esc(&thumbnail),esc(&title))
 }
 fn render_grid(id: &str, items: &[Value]) {
     let grid = el(id);
@@ -741,11 +800,15 @@ pub fn set_view(view: &str) {
             let _ = tab.class_list().toggle_with_force("active", active);
         }
     }
+    if let Some(dock) = document().get_element_by_id("floatingDockWrap") {
+        let _ = dock.class_list().remove_1("dock-scroll-hidden");
+    }
     if view == "library" {
         render_library();
     } else if view == "settings" {
         // Dedicated settings view; keep existing catalog state ready in background
     } else {
+        render_continue_strip();
         load_listing(false, true);
     }
     el("contentCanvas").set_scroll_top(0);
@@ -1070,6 +1133,41 @@ fn render_series_detail(series: &Value) {
         if r.is_empty() { String::new() } else { format!("<span class=\"series-source-tag series-rate-tag\">{} {}</span>", icons::STAR, esc(&r)) }
     };
 
+    let series_url = s(series, "url");
+    let resume_ep = STATE.with(|st| {
+        let st = st.borrow();
+        st.history
+            .iter()
+            .find(|h| {
+                let hu = self::s(h, "url");
+                (!series_url.is_empty() && self::s(h, "seriesUrl") == series_url)
+                    || episodes.iter().any(|ep| self::s(ep, "url") == hu)
+            })
+            .cloned()
+    });
+    let quick_resume_btn = if let Some(ref ep) = resume_ep {
+        let ep_url = s(ep, "url");
+        let ep_num = s(ep, "episodeNum");
+        let t = ep["currentTime"].as_f64().unwrap_or(0.);
+        let label = if !ep_num.is_empty() {
+            format!("أكمل الحلقة {}", esc(&ep_num))
+        } else {
+            "متابعة من حيث توقفت".into()
+        };
+        let time_badge = if t >= 10. {
+            format!("<span class=\"series-resume-time\">{}</span>", format_clock(t))
+        } else {
+            String::new()
+        };
+        format!(
+            "<button class=\"series-resume-btn\" data-action=\"episode\" data-url=\"{}\">{}<span>{label}</span>{time_badge}</button>",
+            esc(&ep_url),
+            icons::PLAY
+        )
+    } else {
+        String::new()
+    };
+
     open_sheet(
         "تفاصيل المسلسل",
         &format!(
@@ -1088,6 +1186,7 @@ fn render_series_detail(series: &Value) {
             {}\
             <p class=\"series-detail-story\" id=\"seriesStory\">{}</p>\
             {}\
+            {}\
             <div class=\"series-episode-heading\"><h5>الحلقات</h5><span>{}</span></div>\
             <div class=\"season-tabs\" id=\"sheetSeasonTabs\">{tabs}</div>\
             <label class=\"episode-search\">{}\
@@ -1104,6 +1203,7 @@ fn render_series_detail(series: &Value) {
             providers,
             esc(&s(series, "story")),
             story_toggle,
+            quick_resume_btn,
             episodes.len(),
             icons::SEARCH,
             esc(seasons.first().map(String::as_str).unwrap_or("1"))
@@ -1397,6 +1497,9 @@ fn sync_cinemana_visibility() {
 }
 fn update_source() {
     let source = STATE.with(|state| state.borrow().source.clone());
+    if let Some(root) = document().document_element() {
+        let _ = root.set_attribute("data-active-source", &source);
+    }
     if let Ok(buttons) = document().query_selector_all("[data-source],[data-pref-source]") {
         for i in 0..buttons.length() {
             if let Some(button) = buttons.item(i).and_then(|n| n.dyn_into::<Element>().ok()) {
@@ -1911,6 +2014,7 @@ pub fn init() {
     on("clearHistoryBtn", "click", |_| {
         STATE.with(|state| state.borrow_mut().history.clear());
         store("krmzi_hist", "[]");
+        render_continue_strip();
         render_library();
         notify("تم مسح سجل المشاهدة");
     });
@@ -1918,6 +2022,7 @@ pub fn init() {
         on("settingsClearHistoryBtn", "click", |_| {
             STATE.with(|state| state.borrow_mut().history.clear());
             store("krmzi_hist", "[]");
+            render_continue_strip();
             render_library();
             notify("تم مسح سجل المشاهدة");
         });

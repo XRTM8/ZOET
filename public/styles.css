@@ -3299,6 +3299,271 @@ html[data-display='desktop'] .sheet-content:has(.series-detail-hero) .sheet-epis
   box-shadow: 0 4px 12px rgba(229, 57, 53, 0.4);
 }
 
+/* =========================================================================
+   Logical UI/UX Refinement Pass (Hierarchy, Cards, Badges, Dock Scrim)
+   ========================================================================= */
+
+/* 1. Header Hierarchy: Underline Tabs & Balanced Alignment */
+.catalogue-tabs {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  gap: 18px;
+}
+.catalogue-tabs button {
+  min-width: auto;
+  height: 40px;
+  padding: 0 4px;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-dim);
+  border-bottom: 2px solid transparent;
+  transition: color .18s ease, border-color .18s ease;
+}
+.catalogue-tabs button.active {
+  color: #ffffff;
+  border-bottom-color: #ffffff;
+}
+@media (max-width: 1023px) {
+  .top-nav-end:has(#desktopWindowControls.hidden) {
+    display: none;
+  }
+  .catalogue-tabs {
+    margin-inline-start: auto;
+  }
+}
+
+/* 2. Remove redundant header repeat (#catalogueTitle) above the grid */
+#seriesSection .section-headline {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  margin: 0;
+}
+
+/* 3. Balanced source filter row on mobile */
+.source-switcher {
+  padding: 12px 20px 14px;
+  gap: 10px;
+}
+@media (max-width: 619px) {
+  html[data-view='series'] .source-switcher .source-label {
+    display: none;
+  }
+  .source-switcher .source-options {
+    width: 100%;
+    display: flex;
+    margin-inline-start: 0;
+  }
+  .source-switcher .source-option {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+}
+
+/* 4. Compact, gap-free Card Metadata */
+.series-tile-title {
+  height: auto;
+  min-height: 0;
+  max-height: 2.85em;
+}
+.series-tile-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 5px;
+  min-height: 0;
+}
+.series-tile-sub {
+  margin-top: 0;
+}
+.catalogue-sources {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 0;
+}
+.catalogue-sources:empty {
+  display: none;
+}
+html[data-active-source='krmzi'] #seriesGrid .catalogue-sources,
+html[data-active-source='cinemana'] #seriesGrid .catalogue-sources {
+  display: none;
+}
+
+/* 5. Continue Watching slim pill & Series quick-resume button */
+.continue-strip {
+  margin-bottom: 16px;
+}
+.continue-pill {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 14px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-main);
+  text-align: start;
+  overflow: hidden;
+  transition: background .18s, border-color .18s, transform .15s;
+}
+.continue-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.continue-pill:active {
+  transform: scale(0.985);
+}
+.continue-play {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #ffffff;
+  color: #090b0f;
+  flex-shrink: 0;
+}
+.continue-play svg {
+  width: 12px;
+  height: 12px;
+}
+.continue-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.continue-copy strong {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.continue-copy small {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.continue-time,
+.series-resume-time {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-sub);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 3px 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.continue-progress {
+  position: absolute;
+  inset: auto 0 0;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.continue-progress > span {
+  display: block;
+  height: 100%;
+  background: #ffffff;
+}
+.series-resume-btn {
+  width: calc(100% - 44px);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  min-height: 46px;
+  padding: 10px 14px;
+  margin: 0 22px 16px;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #090b0f;
+  font-size: 13.5px;
+  font-weight: 700;
+  transition: opacity .16s, transform .15s;
+}
+.series-resume-btn:active {
+  transform: scale(0.98);
+}
+.series-resume-btn .series-resume-time {
+  margin-inline-start: auto;
+  background: rgba(9, 11, 15, 0.12);
+  color: #090b0f;
+}
+html[data-display='desktop'] .sheet-content:has(.series-detail-hero) > :not(.sheet-episode-grid) {
+  grid-column: 1;
+}
+html[data-display='desktop'] .series-resume-btn,
+html[data-display='tv'] .series-resume-btn {
+  width: 100%;
+  margin: 0 0 12px;
+}
+html[data-display='tv'] .series-resume-btn {
+  grid-column: 1;
+  grid-row: 5;
+  font-size: 18px;
+  min-height: 54px;
+}
+
+/* 6. Dock Scrim Protection, Pill Breathing Room, Scroll Auto-Hide & Desktop Search Dedupe */
+.glass-dock-wrap::before {
+  content: "";
+  position: fixed;
+  inset: auto 0 0;
+  height: calc(96px + var(--safe-bottom));
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.90) 0%, rgba(0, 0, 0, 0.45) 55%, transparent 100%);
+  pointer-events: none;
+  z-index: -1;
+}
+.glass-dock-wrap.dock-scroll-hidden {
+  opacity: 0;
+  transform: translateY(24px);
+}
+.glass-dock-wrap.dock-scroll-hidden .glass-dock,
+.glass-dock-wrap.dock-scroll-hidden .dock-search-fab {
+  pointer-events: none;
+}
+@media (max-width: 619px) {
+  .dock-pill {
+    height: 52px;
+    gap: 4px;
+    padding: 5px 14px;
+  }
+  .dock-ico {
+    width: 18px;
+    height: 18px;
+  }
+  .dock-ico svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+@media (min-width: 1024px) {
+  html[data-display='desktop'] .dock-search-fab {
+    display: none;
+  }
+}
+
+
 
 
 

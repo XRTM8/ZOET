@@ -2182,7 +2182,7 @@ checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "otium-core"
-version = "2.9.1"
+version = "2.9.2"
 dependencies = [
  "base64 0.22.1",
  "futures-util",
@@ -4747,7 +4747,7 @@ checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 
 [[package]]
 name = "zoet-desktop"
-version = "2.9.1"
+version = "2.9.2"
 dependencies = [
  "include_dir",
  "otium-core",
