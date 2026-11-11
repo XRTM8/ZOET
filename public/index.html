@@ -335,7 +335,7 @@
     <div class="video-stage" id="playerCanvas" tabindex="-1">
       <div class="player-backdrop" id="playerBackdrop" aria-hidden="true"></div>
       <video id="nativePlayer" playsinline webkit-playsinline preload="none" referrerpolicy="no-referrer" class="video-elem hidden"></video>
-      <iframe id="embedPlayer" class="video-elem hidden" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-autoplay" referrerpolicy="no-referrer"></iframe>
+      <iframe id="embedPlayer" class="video-elem hidden" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" referrerpolicy="no-referrer"></iframe>
       <div class="player-brightness-veil" id="playerBrightnessOverlay" aria-hidden="true"></div>
 
       <button class="touch-unlock-pill hidden" id="unlockTouchBtn" aria-label="إلغاء قفل اللمس">
@@ -589,7 +589,8 @@
 
       if (seriesGrid && canvas && seriesBtn && 'MutationObserver' in window) {
         const gridObs = new MutationObserver(() => {
-          if (canvas.scrollHeight - canvas.scrollTop - canvas.clientHeight < 200) {
+          if (canvas.scrollHeight > canvas.clientHeight + 120 &&
+              canvas.scrollHeight - canvas.scrollTop - canvas.clientHeight < 200) {
             checkAndTrigger(seriesBtn);
           }
         });
@@ -598,7 +599,8 @@
 
       if (searchGrid && searchArea && searchBtn && 'MutationObserver' in window) {
         const searchGridObs = new MutationObserver(() => {
-          if (searchArea.scrollHeight - searchArea.scrollTop - searchArea.clientHeight < 200) {
+          if (searchArea.scrollHeight > searchArea.clientHeight + 120 &&
+              searchArea.scrollHeight - searchArea.scrollTop - searchArea.clientHeight < 200) {
             checkAndTrigger(searchBtn);
           }
         });
