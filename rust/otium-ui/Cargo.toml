@@ -1,6 +1,6 @@
 [package]
 name = "otium-ui"
-version = "2.9.6"
+version = "2.9.7"
 edition = "2021"
 license = "ISC"
 
@@ -19,9 +19,8 @@ futures-util = "0.3"
 gloo-timers = { version = "0.3", features = ["futures"] }
 web-sys = { version = "0.3.107", features = [
   "Window", "Document", "Element", "HtmlElement", "Node", "NodeList", "DomTokenList", "DomRect", "CssStyleDeclaration",
-  "Event", "EventTarget", "KeyboardEvent", "PointerEvent", "MouseEvent", "TouchEvent", "TouchList", "Touch", "WheelEvent",
+  "Event", "EventTarget", "KeyboardEvent", "PointerEvent", "MouseEvent", "TouchEvent", "TouchList", "Touch",
   "HtmlVideoElement", "HtmlMediaElement", "HtmlIFrameElement", "HtmlTrackElement", "TextTrackList", "TextTrack", "TextTrackMode", "TimeRanges", "MediaError",
-  "AudioContext", "BaseAudioContext", "AudioDestinationNode", "AudioParam", "MediaElementAudioSourceNode", "GainNode",
   "HtmlCanvasElement", "CanvasRenderingContext2d",
   "DragEvent", "DataTransfer", "FileList", "File", "FileReader",
   "TextTrackCueList", "TextTrackCue",

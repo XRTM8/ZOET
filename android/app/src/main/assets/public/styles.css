@@ -336,44 +336,6 @@ video::-webkit-media-controls-panel {
   display: flex;
 }
 
-.seek-ripple {
-  flex: 1;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.ripple-bubble {
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  padding: 10px 18px;
-  border-radius: 30px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #f0f2f5;
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.5px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-  transform: scale(0.85);
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.seek-ripple.active {
-  opacity: 1;
-}
-
-.seek-ripple.active .ripple-bubble {
-  transform: scale(1.05);
-}
-
 /* Spinner */
 .player-loader {
   position: absolute;
@@ -545,6 +507,7 @@ video::-webkit-media-controls-panel {
 
 /* Center Playback Controls */
 .player-center-ctrl {
+  direction: ltr;
   position: absolute;
   inset: 0;
   z-index: 12;
@@ -3295,16 +3258,6 @@ html[data-display='tv'] .action-circle-icon {
    ZOET Cinema Player Overhaul — Mobile Portrait, Landscape, Desktop & TV
    ========================================================================= */
 
-.player-brightness-veil {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  background: #000000;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.08s linear;
-}
-
 .touch-unlock-pill {
   position: absolute;
   top: calc(var(--safe-top) + 16px);
@@ -3736,13 +3689,6 @@ video::cue {
   opacity: 0.42;
   cursor: not-allowed;
 }
-.tools-note {
-  color: var(--text-dim);
-  font-size: 11px;
-  line-height: 1.6;
-  margin-top: -2px;
-}
-
 /* Keep TV Player Rules Crisp & Focus-Ready */
 html[data-display='tv'] .desktop-inline-tool {
   display: none !important;

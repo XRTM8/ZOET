@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="preload" href="fonts/tajawal-5.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="fonts/tajawal.css">
-  <link rel="stylesheet" href="styles.css?v=2.9.6">
+  <link rel="stylesheet" href="styles.css?v=2.9.7">
 </head>
 <body>
 <div class="app-frame" id="appFrame">
@@ -236,7 +236,7 @@
               </span>
               <div>
                 <h3>إصدار ZOET</h3>
-                <p id="installedVersionText">v2.9.6</p>
+                <p id="installedVersionText">v2.9.7</p>
               </div>
             </div>
             <button class="check-update-btn" id="manualCheckUpdateBtn">
@@ -336,7 +336,6 @@
       <div class="player-backdrop" id="playerBackdrop" aria-hidden="true"></div>
       <video id="nativePlayer" playsinline webkit-playsinline preload="none" referrerpolicy="no-referrer" class="video-elem hidden"></video>
       <iframe id="embedPlayer" class="video-elem hidden" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" referrerpolicy="no-referrer"></iframe>
-      <div class="player-brightness-veil" id="playerBrightnessOverlay" aria-hidden="true"></div>
 
       <button class="touch-unlock-pill hidden" id="unlockTouchBtn" aria-label="إلغاء قفل اللمس">
         <svg class="z-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10" rx="2.2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg>
@@ -350,20 +349,7 @@
 
       <div class="gesture-pill hidden" id="swipeIndicator"><span id="swipeValue"></span></div>
 
-      <div class="touch-surface" id="gesturesLayer">
-        <div class="seek-ripple left" id="rippleLeft">
-          <div class="ripple-bubble">
-            <svg class="z-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m11 17-5-5 5-5M18 17l-5-5 5-5"/></svg>
-            <span>10-</span>
-          </div>
-        </div>
-        <div class="seek-ripple right" id="rippleRight">
-          <div class="ripple-bubble">
-            <span>+10</span>
-            <svg class="z-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m13 17 5-5-5-5M6 17l5-5-5-5"/></svg>
-          </div>
-        </div>
-      </div>
+      <div class="touch-surface" id="gesturesLayer"></div>
 
       <button class="skip-intro-pill hidden" id="skipIntroBtn">
         <span>تخطي الشارة</span>
@@ -461,7 +447,7 @@
               <button class="action-circle-icon desktop-inline-tool" id="togglePipBtn" aria-label="صورة داخل صورة" title="صورة داخل صورة (P)">
                 <svg class="z-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2"/><rect x="11.5" y="11" width="7" height="5.5" rx="1" fill="currentColor" fill-opacity="0.3"/></svg>
               </button>
-              <button class="action-circle-icon" id="playerMoreToolsBtn" aria-label="أدوات المشغل المتقدمة" title="أدوات المشغل (السرعة، الصوت، الترجمة، القفل)">
+              <button class="action-circle-icon" id="playerMoreToolsBtn" aria-label="أدوات المشغل المتقدمة" title="أدوات المشغل (السرعة، الترجمة، القفل)">
                 <svg class="z-ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5.5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18.5" cy="12" r="1.7"/></svg>
               </button>
               <button class="action-circle-icon" id="toggleFullscreenBtn" aria-label="ملء الشاشة" title="ملء الشاشة (F)">
@@ -617,8 +603,8 @@
 </script>
 <script src="vendor/hls/hls.min.js" defer></script>
 <script type="module">
-import init from './wasm/otium_ui.js?v=2.9.6';
-init({ module_or_path: './wasm/otium_ui_bg.wasm?v=2.9.6' }).catch(() => { document.getElementById('bootStatus').textContent = 'تعذّر تشغيل التطبيق. أعد فتحه أو تحديث المتصفح.'; });
+import init from './wasm/otium_ui.js?v=2.9.7';
+init({ module_or_path: './wasm/otium_ui_bg.wasm?v=2.9.7' }).catch(() => { document.getElementById('bootStatus').textContent = 'تعذّر تشغيل التطبيق. أعد فتحه أو تحديث المتصفح.'; });
 </script>
 </body>
 </html>

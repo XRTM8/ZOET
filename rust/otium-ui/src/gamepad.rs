@@ -121,13 +121,13 @@ fn poll_gamepads() {
             let mut handled = true;
             if axis_y < -0.55 {
                 if player::is_open() && !app::is_sheet_open() {
-                    player::adjust_volume(0.05);
+                    player::remote_arrow("arrowup");
                 } else {
                     app::remote_focus_key("ArrowUp");
                 }
             } else if axis_y > 0.55 {
                 if player::is_open() && !app::is_sheet_open() {
-                    player::adjust_volume(-0.05);
+                    player::remote_arrow("arrowdown");
                 } else {
                     app::remote_focus_key("ArrowDown");
                 }
@@ -277,7 +277,7 @@ fn handle_button(btn: usize, just_pressed: bool) {
         // Button 12: D-pad Up
         12 => {
             if player::is_open() && !app::is_sheet_open() {
-                player::adjust_volume(0.05);
+                player::remote_arrow("arrowup");
             } else {
                 app::remote_focus_key("ArrowUp");
             }
@@ -286,7 +286,7 @@ fn handle_button(btn: usize, just_pressed: bool) {
         // Button 13: D-pad Down
         13 => {
             if player::is_open() && !app::is_sheet_open() {
-                player::adjust_volume(-0.05);
+                player::remote_arrow("arrowdown");
             } else {
                 app::remote_focus_key("ArrowDown");
             }

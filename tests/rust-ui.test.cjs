@@ -208,6 +208,31 @@ async function run(){
       await page.keyboard.press(']');assert.equal(await page.locator('#nativePlayer').evaluate(v=>v.playbackRate),1.75);
       const timeline=await page.locator('#timelineBar').boundingBox();await page.mouse.move(timeline.x+timeline.width*.25,timeline.y+2);await page.mouse.down();await page.mouse.move(timeline.x+timeline.width*.75,timeline.y+2);await page.mouse.up();
       assert(Math.abs(await page.locator('#nativePlayer').evaluate(v=>v.currentTime)-1350)<15,'Rust pointer timeline drag seeks');
+      const rewind = await page.locator('#centerRewind').boundingBox();
+      const forward = await page.locator('#centerForward').boundingBox();
+      assert(rewind.x < forward.x, 'Rewind stays left of forward in the Arabic interface');
+      const tapSide = async (side, count = 2) => page.locator('#gesturesLayer').evaluate((layer, {side, count}) => {
+        const rect = layer.getBoundingClientRect();
+        for (let tap = 0; tap < count; tap++) {
+          for (const type of ['pointerdown', 'pointerup']) {
+            layer.dispatchEvent(new PointerEvent(type, {
+              pointerType: 'touch', pointerId: 1,
+              clientX: rect.left + rect.width * side, clientY: rect.top + rect.height / 2,
+            }));
+          }
+        }
+      }, {side, count});
+      await tapSide(.5, 1);
+      const beforeTaps = await page.locator('#nativePlayer').evaluate(v => v.currentTime);
+      await tapSide(.75);
+      assert.equal(await page.locator('#nativePlayer').evaluate(v => v.currentTime), beforeTaps + 10);
+      await tapSide(.25);
+      assert.equal(await page.locator('#nativePlayer').evaluate(v => v.currentTime), beforeTaps);
+      assert.equal(await page.locator('.seek-ripple').count(), 0);
+      await page.mouse.move(timeline.x + timeline.width * .5, timeline.y);
+      await page.locator('#playerMoreToolsBtn').click();
+      assert.equal(await page.locator('[data-player-action="boost"]').count(), 0);
+      await page.keyboard.press('Escape');
       await page.locator('#playerCanvas').focus();await page.keyboard.press('Shift+/');assert(await page.locator('.controls-guide').isVisible());await page.keyboard.press('Escape');
       await page.locator('#dismissPlayerBtn').click();await context.close();
       console.log('PASS Rust source switching: staged lookup, settings preservation, failed metadata, failed media rollback, cancellation, shortcuts and pointer seeking');

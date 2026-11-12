@@ -9,9 +9,9 @@ use std::cell::RefCell;
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use wasm_bindgen_futures::{spawn_local, JsFuture};
 use web_sys::{
-    AbortController, AudioContext, CanvasRenderingContext2d, DragEvent, Element, Event,
-    FileReader, GainNode, HtmlCanvasElement, HtmlElement, HtmlInputElement, HtmlVideoElement,
-    KeyboardEvent, PointerEvent, TextTrackCue, TextTrackMode, WheelEvent,
+    AbortController, CanvasRenderingContext2d, DragEvent, Element, Event,
+    FileReader, HtmlCanvasElement, HtmlElement, HtmlInputElement, HtmlVideoElement,
+    KeyboardEvent, PointerEvent, TextTrackCue, TextTrackMode,
 };
 
 #[derive(Clone, Debug)]
@@ -54,8 +54,6 @@ struct Gesture {
     moved: bool,
     hold: bool,
     previous_rate: f64,
-    swipe_mode: u8,
-    swipe_start_val: f64,
 }
 struct Player {
     session: u64,
@@ -97,11 +95,7 @@ struct Player {
     next_cancelled: bool,
     season: String,
     sub_offset: f64,
-    boost_volume: f64,
-    brightness: f64,
     locked: bool,
-    audio_context: Option<AudioContext>,
-    gain_node: Option<GainNode>,
 }
 impl Default for Player {
     fn default() -> Self {
@@ -145,11 +139,7 @@ impl Default for Player {
             next_cancelled: false,
             season: "1".into(),
             sub_offset: 0.,
-            boost_volume: 1.0,
-            brightness: 1.0,
             locked: false,
-            audio_context: None,
-            gain_node: None,
         }
     }
 }
@@ -286,7 +276,6 @@ fn release_media() {
     let _ = v.remove_attribute("src");
     let _ = v.remove_attribute("poster");
     v.load();
-    detach_audio_boost(false);
     let frame = el("embedPlayer");
     let _ = Reflect::set(frame.as_ref(), &"onload".into(), &JsValue::NULL);
     let _ = Reflect::set(frame.as_ref(), &"onerror".into(), &JsValue::NULL);
@@ -1755,11 +1744,9 @@ pub fn close() {
         p.tap_timer = None;
         p.unlock_timer = None;
         p.locked = false;
-        p.brightness = 1.0;
     });
     class("mobilePlayer", "touch-locked", false);
     show("unlockTouchBtn", false);
-    style("playerBrightnessOverlay", "opacity", "0");
     release_media();
     show("mobilePlayer", false);
     show("playerSpinner", false);
@@ -1782,20 +1769,11 @@ pub fn toggle() {
     }
     show_hud(true);
 }
-fn ripple(forward: bool) {
-    let id = if forward { "rippleRight" } else { "rippleLeft" };
-    class(id, "active", true);
-    Timeout::new(450, move || {
-        class(id, "active", false);
-    })
-    .forget();
-}
 pub fn seek(seconds: f64) {
     let v = video();
     if v.duration().is_finite() && v.duration() > 0. {
         v.set_current_time((v.current_time() + seconds).clamp(0., v.duration()));
         progress();
-        ripple(seconds > 0.);
     }
 }
 fn format_time(time: f64) -> String {
@@ -1979,109 +1957,6 @@ fn sync_tool_states() {
         },
     );
 }
-fn apply_brightness(level: f64) {
-    let level = level.clamp(0.25, 1.0);
-    STATE.with(|c| c.borrow_mut().brightness = level);
-    let dim = (1.0 - level).clamp(0.0, 0.75);
-    style("playerBrightnessOverlay", "opacity", &format!("{dim:.3}"));
-}
-fn is_audio_boost_supported(v: &HtmlVideoElement) -> bool {
-    if STATE.with(|c| c.borrow().embedded.is_some()) {
-        return false;
-    }
-    let mut src = v.current_src();
-    if src.is_empty() {
-        src = v.get_attribute("src").unwrap_or_default();
-    }
-    if src.is_empty() {
-        return false;
-    }
-    if src.starts_with("blob:") || src.starts_with('/') {
-        return true;
-    }
-    let origin = window().location().origin().unwrap_or_default();
-    !origin.is_empty() && src.starts_with(&origin)
-}
-fn detach_audio_boost(resume_playback: bool) {
-    let ctx = STATE.with(|c| {
-        let mut p = c.borrow_mut();
-        p.gain_node = None;
-        p.boost_volume = 1.0;
-        p.audio_context.take()
-    });
-    let Some(ctx) = ctx else {
-        return;
-    };
-    let snap = if resume_playback {
-        Some((
-            snapshot(),
-            STATE.with(|c| c.borrow().stream_index),
-            current_episode(),
-            STATE.with(|c| c.borrow().embedded.is_none()),
-        ))
-    } else {
-        None
-    };
-    if resume_playback {
-        stop_hls();
-    }
-    let _ = ctx.close();
-    let old_v = el("nativePlayer");
-    let was_hidden = old_v.class_list().contains("hidden");
-    let inline_filter = storage("zoet_video_filter").unwrap_or_else(|| "normal".into());
-    if let Ok(new_el) = document().create_element("video") {
-        let _ = new_el.set_attribute("id", "nativePlayer");
-        let _ = new_el.set_attribute("playsinline", "");
-        let _ = new_el.set_attribute("webkit-playsinline", "");
-        let _ = new_el.set_attribute("preload", "none");
-        let _ = new_el.set_attribute("referrerpolicy", "no-referrer");
-        let _ = new_el.set_attribute(
-            "class",
-            if was_hidden { "video-elem hidden" } else { "video-elem" },
-        );
-        let _ = old_v.replace_with_with_node_1(&new_el);
-        if let Some((_, _, css)) = FILTERS.iter().find(|(id, _, _)| id == &inline_filter) {
-            apply_video_filter(css);
-        }
-        let sub_color = storage("zoet_sub_color").unwrap_or_else(|| "yellow".into());
-        if let Some((_, _, hex)) = SUB_COLORS.iter().find(|(id, _, _)| id == &sub_color) {
-            apply_sub_color(hex);
-        }
-        bind_video_events();
-    }
-    if let Some((snap, idx, Some(ep), true)) = snap {
-        subtitles(&ep);
-        play_direct(Some(idx), snap, false);
-    }
-}
-fn set_boost(target: f64) {
-    let target = target.clamp(0., 3.0);
-    if target <= 1.0 {
-        detach_audio_boost(true);
-        let v = video();
-        STATE.with(|c| c.borrow_mut().boost_volume = target);
-        v.set_muted(false);
-        v.set_volume(target);
-        pill(&format!("الصوت {:.0}%", target * 100.));
-        return;
-    }
-    let v = video();
-    v.set_muted(false);
-    v.set_volume(1.0);
-    if !ensure_audio_boost(&v) {
-        STATE.with(|c| c.borrow_mut().boost_volume = 1.0);
-        pill("مضخم الصوت يدعم بث HLS الموحد فقط (أقصى صوت 100%)");
-        return;
-    }
-    STATE.with(|c| {
-        let mut p = c.borrow_mut();
-        if let Some(gain) = &p.gain_node {
-            gain.gain().set_value(target as f32);
-            p.boost_volume = target;
-        }
-    });
-    pill(&format!("مضخم الصوت: {:.0}%", target * 100.));
-}
 fn set_speed(rate: f64) {
     let rate = rate.clamp(0.5, 2.0);
     video().set_playback_rate(rate);
@@ -2118,7 +1993,6 @@ fn set_touch_locked(locked: bool) {
 pub fn open_tools_sheet() {
     let v = video();
     let cur_rate = v.playback_rate();
-    let cur_boost = STATE.with(|c| c.borrow().boost_volume);
     let cur_fit = storage("otium_fit_mode").unwrap_or_else(|| "contain".into());
     let cur_filter = storage("zoet_video_filter").unwrap_or_else(|| "normal".into());
     let cur_offset = STATE.with(|c| c.borrow().sub_offset);
@@ -2140,22 +2014,6 @@ pub fn open_tools_sheet() {
         ));
     }
     html.push_str("</div>");
-
-    html.push_str("<div class=\"sheet-sub-title\">مضخّم الصوت</div><div class=\"sheet-chip-grid\">");
-    let boost_ok = is_audio_boost_supported(&v);
-    for (val, label) in [(1.0, "100%"), (1.5, "150%"), (2.0, "200%"), (3.0, "300%")] {
-        let active = (cur_boost - val).abs() < 0.12;
-        let disabled = val > 1.0 && !boost_ok;
-        html.push_str(&format!(
-            "<button class=\"sheet-chip-btn {}\" data-player-action=\"boost\" data-boost=\"{val}\" {}>{label}</button>",
-            if active { "active" } else { "" },
-            if disabled { "disabled" } else { "" }
-        ));
-    }
-    html.push_str("</div>");
-    if !boost_ok {
-        html.push_str("<p class=\"tools-note\">مضخم الصوت فوق 100% يعمل مع البث الموحد (HLS) فقط للحفاظ على استقرار الصوت.</p>");
-    }
 
     html.push_str("<div class=\"sheet-sub-title\">أبعاد العرض</div><div class=\"sheet-chip-grid\">");
     for (mode, label) in [("contain", "الإطار الكامل"), ("cover", "ملء الشاشة"), ("fill", "تمدد")] {
@@ -2207,51 +2065,6 @@ pub fn open_tools_sheet() {
     html.push_str("<button class=\"sheet-row\" data-player-action=\"controls-help\"><span>اختصارات التحكم والريموت</span><span class=\"sheet-pill\">؟</span></button>");
     html.push_str("</div>");
     app::open_sheet("أدوات المشغل", &html);
-}
-fn ensure_audio_boost(v: &HtmlVideoElement) -> bool {
-    if !is_audio_boost_supported(v) {
-        return false;
-    }
-    let existing = STATE.with(|c| {
-        let p = c.borrow();
-        if p.gain_node.is_some() {
-            p.audio_context.clone()
-        } else {
-            None
-        }
-    });
-    if let Some(ctx) = existing {
-        let _ = ctx.resume();
-        return true;
-    }
-    let Ok(ctx) = AudioContext::new() else {
-        return false;
-    };
-    let _ = ctx.resume();
-    let Ok(source) = ctx.create_media_element_source(v) else {
-        let _ = ctx.close();
-        return false;
-    };
-    let Ok(gain) = ctx.create_gain() else {
-        let _ = ctx.close();
-        return false;
-    };
-    if source.connect_with_audio_node(&gain).is_err()
-        || gain.connect_with_audio_node(&ctx.destination()).is_err()
-    {
-        let _ = ctx.close();
-        return false;
-    }
-    STATE.with(|c| {
-        let mut p = c.borrow_mut();
-        p.audio_context = Some(ctx);
-        p.gain_node = Some(gain);
-    });
-    true
-}
-pub fn adjust_volume(delta: f64) {
-    let current = STATE.with(|c| c.borrow().boost_volume);
-    set_boost(current + delta);
 }
 pub fn adjust_sub_delay(delta_seconds: f64) {
     let new_offset = STATE.with(|c| {
@@ -2626,18 +2439,15 @@ pub fn controls_help() {
         ("Space / K", "تشغيل وإيقاف"),
         ("J / L", "رجوع وتقديم 10 ثوانٍ"),
         ("← / →", "5 ثوانٍ · مع Shift: 30 ثانية"),
-        ("↑ / ↓", "مستوى الصوت"),
         ("0–9", "الانتقال لنسبة من الفيديو"),
         ("M", "كتم الصوت"),
         ("F / P", "ملء الشاشة / صورة مصغرة"),
         ("T", "وضع المسرح / شاشة عريضة"),
         ("V", "فلاتر الصورة (أنمي / سينما / ليلي)"),
-        ("B", "مضخم الصوت حتى 300%"),
         ("G / H", "مزامنة الترجمة (- / +)"),
         ("Shift+C", "لون الترجمة (أصفر / أبيض / نيون)"),
         ("Shift+S", "التقاط لقطة شاشة"),
         ("Gamepad", "دعم كامل ليد تحكم إكس بوكس وبلايستيشن"),
-        ("عجلة الفأرة", "مستوى الصوت بدقة"),
         ("C / Q", "الترجمة / الجودة"),
         ("E / S", "الحلقات / المصادر"),
         ("[ / ]", "سرعة العرض"),
@@ -2748,12 +2558,6 @@ fn action(row: Element) {
         "speed" => {
             if let Ok(rate) = row.get_attribute("data-rate").unwrap_or_default().parse::<f64>() {
                 set_speed(rate);
-                open_tools_sheet();
-            }
-        }
-        "boost" => {
-            if let Ok(val) = row.get_attribute("data-boost").unwrap_or_default().parse::<f64>() {
-                set_boost(val);
                 open_tools_sheet();
             }
         }
@@ -2871,12 +2675,6 @@ fn keyboard(event: Event) {
         "l" | "mediafastforward" => seek(10.),
         "arrowleft" => seek(if event.shift_key() { -30. } else { -5. }),
         "arrowright" => seek(if event.shift_key() { 30. } else { 5. }),
-        "arrowup" => adjust_volume(0.05),
-        "arrowdown" => adjust_volume(-0.05),
-        "b" => {
-            let current = STATE.with(|c| c.borrow().boost_volume);
-            adjust_volume(if current > 1.0 { 1.0 - current } else { 1.0 });
-        }
         "g" => adjust_sub_delay(if event.shift_key() { -1.0 } else { -0.25 }),
         "h" => adjust_sub_delay(if event.shift_key() { 1.0 } else { 0.25 }),
         "m" => v.set_muted(!v.muted()),
@@ -2922,7 +2720,7 @@ fn keyboard(event: Event) {
         event.prevent_default();
     }
 }
-fn remote_arrow(key: &str) {
+pub(crate) fn remote_arrow(key: &str) {
     if el("playerHudTop").class_list().contains("hud-hidden") {
         if key == "arrowleft" || key == "arrowright" {
             seek(if key == "arrowleft" { -10. } else { 10. });
@@ -3015,23 +2813,13 @@ fn gestures() {
             return;
         }
         let v = video();
-        let rect = el("gesturesLayer").get_bounding_client_rect();
-        let x = event.client_x() as f64;
-        let is_right = x - rect.left() >= rect.width() / 2.;
-        let start_val = if is_right {
-            STATE.with(|c| c.borrow().boost_volume)
-        } else {
-            STATE.with(|c| c.borrow().brightness)
-        };
         let gesture = Gesture {
-            x,
+            x: event.client_x() as f64,
             y: event.client_y() as f64,
             at: now(),
             moved: false,
             hold: false,
             previous_rate: v.playback_rate(),
-            swipe_mode: 0,
-            swipe_start_val: start_val,
         };
         let hold = Timeout::new(350, || {
             let enable = STATE.with(|c| {
@@ -3067,36 +2855,12 @@ fn gestures() {
         }
         let dx = event.client_x() as f64 - gesture.x;
         let dy = event.client_y() as f64 - gesture.y;
-        let mut swipe_mode = gesture.swipe_mode;
-        if swipe_mode == 0 && (dx.abs() > 10. || dy.abs() > 10.) {
-            if dy.abs() > 14. && dy.abs() > dx.abs() * 1.35 {
-                let rect = el("gesturesLayer").get_bounding_client_rect();
-                swipe_mode = if gesture.x - rect.left() >= rect.width() / 2. {
-                    1
-                } else {
-                    2
-                };
-            }
+        if !gesture.moved && (dx.abs() > 10. || dy.abs() > 10.) {
             STATE.with(|c| {
                 let mut p = c.borrow_mut();
                 p.gesture.moved = true;
-                p.gesture.swipe_mode = swipe_mode;
                 p.hold = None;
             });
-        }
-        if swipe_mode == 1 {
-            let delta = (-dy / 160.).clamp(-1.0, 1.0);
-            let target = (gesture.swipe_start_val + delta).clamp(0., 1.0);
-            let v = video();
-            v.set_muted(false);
-            v.set_volume(target);
-            STATE.with(|c| c.borrow_mut().boost_volume = target);
-            pill(&format!("الصوت {:.0}%", target * 100.));
-        } else if swipe_mode == 2 {
-            let delta = (-dy / 160.).clamp(-0.75, 0.75);
-            let target = (gesture.swipe_start_val + delta).clamp(0.25, 1.0);
-            apply_brightness(target);
-            pill(&format!("الإضاءة {:.0}%", target * 100.));
         }
     });
     for name in ["pointerup", "pointercancel"] {
@@ -3271,18 +3035,6 @@ pub fn init() {
     on("timelineBar", "pointerup", |event| {
         if let Ok(event) = event.dyn_into::<PointerEvent>() {
             let _ = el("timelineBar").release_pointer_capture(event.pointer_id());
-        }
-    });
-    on("playerCanvas", "wheel", |event| {
-        if let Ok(event) = event.dyn_into::<WheelEvent>() {
-            let v = video();
-            if !v.duration().is_finite() {
-                return;
-            }
-            event.prevent_default();
-            let delta = event.delta_y();
-            let step = if delta < 0. { 0.05 } else { -0.05 };
-            adjust_volume(step);
         }
     });
     init_sub_drag_and_drop();
