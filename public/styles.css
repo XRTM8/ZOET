@@ -597,16 +597,17 @@ video::-webkit-media-controls-panel {
   flex-direction: column;
   gap: 12px;
   pointer-events: none;
-  transition: opacity 0.24s cubic-bezier(0.16, 1, 0.3, 1), transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: opacity, transform;
+  transition: opacity 0.2s ease, visibility 0s;
 }
 .player-bar-bottom > * {
   pointer-events: auto;
 }
 .player-bar-bottom.hud-hidden {
-  opacity: 0 !important;
-  transform: translateY(14px);
-  pointer-events: none !important;
+  visibility: hidden;
+  transition-delay: 0s, 0.2s;
+}
+.player-bar-bottom.hud-hidden > * {
+  pointer-events: none;
 }
 
 .scrub-line {
@@ -620,18 +621,12 @@ video::-webkit-media-controls-panel {
   cursor: pointer;
   touch-action: none;
   direction: ltr !important;
-  transition: height 0.16s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .scrub-line:before {
   content: '';
   position: absolute;
   inset: -12px 0;
 }
-.scrub-line:hover,
-.scrub-line:active {
-  height: 8px;
-}
-
 .scrub-loaded {
   position: absolute;
   height: 100%;
@@ -707,9 +702,6 @@ video::-webkit-media-controls-panel {
 }
 
 .action-capsule {
-  background: rgba(10, 12, 16, 0.75);
-  backdrop-filter: blur(24px) saturate(160%);
-  -webkit-backdrop-filter: blur(24px) saturate(160%);
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: #e2e8f0;
   font-size: 12px;
@@ -722,7 +714,7 @@ video::-webkit-media-controls-panel {
   gap: 8px;
   cursor: pointer;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
-  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   white-space: nowrap;
 }
 .action-capsule i, .action-capsule svg {
@@ -738,16 +730,11 @@ video::-webkit-media-controls-panel {
   background: rgba(255, 255, 255, 0.15);
   border-color: rgba(255, 255, 255, 0.28);
   color: #ffffff;
-  transform: translateY(-2px);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.7);
 }
 .action-capsule:hover i, .action-capsule:hover svg {
   color: #ffffff;
 }
-.action-capsule:active {
-  transform: scale(0.94);
-}
-
 .bar-circle-dock {
   background: rgba(10, 12, 16, 0.75);
   backdrop-filter: blur(24px) saturate(160%);
@@ -777,15 +764,11 @@ video::-webkit-media-controls-panel {
   justify-content: center;
   cursor: pointer;
   padding: 0;
-  transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 .action-circle-icon:hover {
   background: rgba(255, 255, 255, 0.16);
   color: #ffffff;
-  transform: scale(1.08);
-}
-.action-circle-icon:active {
-  transform: scale(0.92);
 }
 
 /* Episodes Drawer beneath player */
@@ -874,6 +857,7 @@ video::-webkit-media-controls-panel {
 .player-screen.embed-mode .player-bar-bottom {
   opacity: 1 !important;
   display: flex !important;
+  visibility: visible;
   pointer-events: none;
 }
 
@@ -3325,10 +3309,6 @@ html[data-display='tv'] .action-circle-icon {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
-.scrub-line:hover,
-.scrub-line:active {
-  height: 7px;
-}
 .scrub-pin {
   width: 14px;
   height: 14px;
@@ -3366,9 +3346,7 @@ html[data-display='tv'] .action-circle-icon {
   flex-wrap: nowrap;
 }
 .action-capsule {
-  background: rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: #222428;
   border: 1px solid rgba(255, 255, 255, 0.16);
   color: #f8fafc;
   font-size: 11.5px;
@@ -3381,6 +3359,11 @@ html[data-display='tv'] .action-circle-icon {
   box-shadow: none;
   min-width: 0;
 }
+#openServersSheetBtn,
+#openQualitySheetBtn {
+  inline-size: 88px;
+  justify-content: center;
+}
 .action-capsule span {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3392,9 +3375,8 @@ html[data-display='tv'] .action-circle-icon {
   flex-shrink: 0;
 }
 .action-capsule:hover {
-  transform: none;
   box-shadow: none;
-  background: rgba(255, 255, 255, 0.22);
+  background: #30333a;
   border-color: rgba(255, 255, 255, 0.32);
 }
 
@@ -3416,7 +3398,7 @@ html[data-display='tv'] .action-circle-icon {
   min-width: 32px;
   min-height: 32px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.10);
+  background: #222428;
   border: 1px solid rgba(255, 255, 255, 0.14);
   color: #f1f5f9;
   font-size: 11px;
@@ -3430,6 +3412,10 @@ html[data-display='tv'] .action-circle-icon {
   background: #ffffff;
   color: #090b0f;
   border-color: #ffffff;
+}
+.action-capsule:active,
+.action-circle-icon:active {
+  background: #3b4048;
 }
 
 /* Mobile Portrait Tight Zero-Overlap HUD (< 620px non-fullscreen) */
@@ -3709,6 +3695,9 @@ html[data-display='tv'] .action-capsule {
   font-size: clamp(14px, 1.15vw, 18px) !important;
   padding: 8px 20px !important;
   background: rgba(16, 18, 26, 0.85);
+}
+html[data-display='tv'] :is(#openServersSheetBtn, #openQualitySheetBtn) {
+  inline-size: 140px;
 }
 html[data-display='tv'] .action-circle-icon {
   width: 46px !important;

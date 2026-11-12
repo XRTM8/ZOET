@@ -169,6 +169,69 @@ async function run(){
       await context.close();console.log(`PASS Rust viewport ${viewport.width}x${viewport.height}: episode rows, media start, artwork, menus and close`);
     }
     {
+      const {context,page}=await open('cinemana',{width:1280,height:800},true);
+      await page.route('**/api/cinemana?**',async route=>{
+        const path=new URL(route.request().url()).searchParams.get('path');
+        if(!path?.startsWith('transcoddedFiles/'))return route.continue();
+        const response=await route.fetch();
+        const data=await response.json();
+        data[0].resolution='1080p';
+        await route.fulfill({response,json:data});
+      });
+      await page.locator('#seriesGrid [data-url="cinemana:700"]').click();
+      await page.locator('.sheet-episode-btn').first().click();
+      await page.waitForFunction(()=>document.getElementById('activeQualityLabel').textContent==='1080p');
+      await page.evaluate(()=>window.__ready());
+      await page.locator('#mobilePlayer').evaluate(el=>Promise.all(el.getAnimations().map(animation=>animation.finished)));
+      const bottom=page.locator('#playerHudBottom');
+      const source=page.locator('#openServersSheetBtn');
+      const quality=page.locator('#openQualitySheetBtn');
+      assert.equal((await source.textContent()).trim(),'سينمانا');
+      const initial=await quality.boundingBox();
+      await quality.hover();
+      await page.clock.runFor(3500);
+      assert(!(await bottom.evaluate(el=>el.classList.contains('hud-hidden'))),'The player bar stays visible while pointing at quality');
+      assert.deepEqual(await quality.boundingBox(),initial,'Hover keeps the quality button in place');
+      assert.equal(await quality.evaluate(el=>getComputedStyle(el).backdropFilter),'none');
+      await page.mouse.down();
+      await quality.evaluate(el=>Promise.all(el.getAnimations().map(animation=>animation.finished)));
+      assert.deepEqual(await quality.boundingBox(),initial,'Pressing does not shrink the quality button');
+      await page.mouse.up();
+      assert.equal(await page.locator('[data-player-action="quality-auto"]').count(),0,'Direct video does not offer adaptive quality');
+      await page.locator('#closeSheetBtn').click();
+      assert.equal(await bottom.locator('#takeSnapshotBtn, #toggleVideoFilterBtn').count(),0);
+      await page.locator('#playerMoreToolsBtn').click();
+      assert(await page.locator('[data-player-action="snapshot"]').isVisible());
+      assert(await page.locator('[data-player-action="filter-preset"]').first().isVisible());
+      await page.locator('#closeSheetBtn').click();
+      const intro=page.locator('#skipIntroBtn');
+      const setTime=async time=>page.locator('#nativePlayer').evaluate((video,position)=>{
+        video.currentTime=position;
+        video.dispatchEvent(new Event('timeupdate'));
+      },time);
+      await setTime(25);
+      assert(!(await intro.isVisible()),'Episodes without chapter markers do not guess the intro');
+      await page.locator('#nativePlayer').evaluate(video=>{
+        const chapters=video.addTextTrack('chapters');
+        chapters.mode='hidden';
+        chapters.addCue(new VTTCue(0,12,'Recap'));
+        chapters.addCue(new VTTCue(12,34,'Intro'));
+      });
+      await setTime(8);
+      assert(!(await intro.isVisible()),'An unrelated chapter does not show Skip Intro');
+      await setTime(25);
+      await intro.click();
+      assert.equal(await page.locator('#nativePlayer').evaluate(v=>v.currentTime),34,'Skip Intro jumps to the chapter end');
+      assert(!(await intro.isVisible()));
+      const canvas=await page.locator('#playerCanvas').boundingBox();
+      await page.mouse.move(canvas.x+canvas.width/2,canvas.y+canvas.height/3);
+      await page.clock.runFor(3500);
+      assert(await bottom.evaluate(el=>el.classList.contains('hud-hidden')),'The player bar auto-hides after leaving its controls');
+      await quality.waitFor({state:'hidden'});
+      await context.close();
+      console.log('PASS Cinemana 1080p: stable bottom controls on hover and press, then auto-hide');
+    }
+    {
       const{context,page}=await open('all');
       await page.locator('#seriesGrid [data-url="cinemana:700"]').click();
       await page.locator('[data-series-source="'+seriesUrl+'"]').click();
@@ -320,9 +383,31 @@ async function run(){
       await page.route('**/api/episode/detail?**',async route=>{const response=await route.fetch();const data=await response.json();data.directStreams.unshift({quality:'تلقائي',type:'hls',url:'https://vd196.okcdn.ru/master.m3u8'});await route.fulfill({response,json:data});});
       await page.goto(origin);await page.locator('#seriesGrid .series-tile').first().click();await page.locator('.sheet-episode-btn').first().click();
       await page.waitForFunction(()=>!!window.__engine?.source);assert((await page.evaluate(()=>window.__engine.source)).startsWith('/api/media?url='));assert.equal(await page.evaluate(()=>window.__engine.startLevel),1,'Adaptive starts at720p');
-      await page.evaluate(()=>{window.__ready();window.__media.time=137;});await page.locator('#openQualitySheetBtn').click();await page.locator('[data-player-action="quality-hls"][data-index="2"]').click();
+      await page.evaluate(()=>{
+        window.__media.videoHeight=720;
+        const video=document.getElementById('nativePlayer');
+        Object.defineProperty(video,'videoHeight',{get:()=>window.__media.videoHeight});
+        window.__ready();
+        window.__media.time=137;
+      });
+      const quality=page.locator('#activeQualityLabel');
+      assert.equal(await quality.textContent(),'720p');
+      await page.locator('#openQualitySheetBtn').click();await page.locator('[data-player-action="quality-hls"][data-index="2"]').click();
       assert.equal(await page.evaluate(()=>window.__engine.nextLevel),2);assert.equal(await page.locator('#nativePlayer').evaluate(v=>v.currentTime),137,'HLS level switch preserves buffered timeline');
+      assert.equal(await quality.textContent(),'720p','Requested quality is not shown before the video changes');
+      const resizeVideo=async height=>page.locator('#nativePlayer').evaluate((video,height)=>{
+        window.__media.videoHeight=height;
+        video.dispatchEvent(new Event('resize'));
+      },height);
+      await resizeVideo(1080);
+      assert.equal(await quality.textContent(),'1080p');
       await page.locator('#openQualitySheetBtn').click();await page.locator('[data-player-action="quality-auto"]').click();assert.equal(await page.evaluate(()=>window.__engine.nextLevel),-1);
+      await resizeVideo(480);
+      assert.equal(await quality.textContent(),'480p','Automatic mode displays the dimensions actually playing');
+      await page.evaluate(()=>{window.__engine.levels=[{height:480}];});
+      await page.locator('#openQualitySheetBtn').click();
+      assert.equal(await page.locator('[data-player-action="quality-auto"]').count(),0,'Single-level HLS does not offer adaptive quality');
+      await page.locator('#closeSheetBtn').click();
       await page.locator('#dismissPlayerBtn').click();assert.equal(await page.evaluate(()=>window.__engine.destroyed),true,'Closing destroys HLS downloads');
       await page.evaluate(()=>document.getElementById('nativePlayer').dispatchEvent(new Event('error')));assert(await page.locator('#mobilePlayer').evaluate(el=>el.classList.contains('hidden')),'Late media error cannot reopen a closed HLS player');
       cinemanaHls=true;await page.locator('[data-source="cinemana"]').click();await page.locator('#seriesGrid [data-url="cinemana:700"]').click();await page.locator('.sheet-episode-btn').first().click();await page.waitForFunction(()=>window.__engine?.source==='https://cdn.shabakaty.com/master.m3u8');assert.equal(await page.evaluate(()=>window.__engine.source),'https://cdn.shabakaty.com/master.m3u8','Cinemana HLS bypasses the OK-only media proxy');await page.locator('#dismissPlayerBtn').click();cinemanaHls=false;

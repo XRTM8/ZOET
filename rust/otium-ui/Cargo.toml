@@ -1,6 +1,6 @@
 [package]
 name = "otium-ui"
-version = "2.9.8"
+version = "2.9.9"
 edition = "2021"
 license = "ISC"
 
@@ -23,7 +23,7 @@ web-sys = { version = "0.3.107", features = [
   "HtmlVideoElement", "HtmlMediaElement", "HtmlIFrameElement", "HtmlTrackElement", "TextTrackList", "TextTrack", "TextTrackMode", "TimeRanges", "MediaError",
   "HtmlCanvasElement", "CanvasRenderingContext2d",
   "DragEvent", "DataTransfer", "FileList", "File", "FileReader",
-  "TextTrackCueList", "TextTrackCue",
+  "TextTrackCueList", "TextTrackCue", "TextTrackKind", "VttCue",
   "HtmlInputElement", "HtmlSelectElement", "HtmlButtonElement", "HtmlImageElement", "HtmlCollection",
   "Request", "RequestInit", "RequestCache", "Response", "Headers", "AbortController", "AbortSignal", "UrlSearchParams", "Url", "Blob",
   "Storage", "Location", "History", "Navigator", "ServiceWorkerContainer", "MediaQueryList", "Performance", "ScrollToOptions", "ScrollBehavior", "FocusOptions", "console", "Gamepad", "GamepadButton"

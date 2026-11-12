@@ -11,7 +11,7 @@ use wasm_bindgen_futures::{spawn_local, JsFuture};
 use web_sys::{
     AbortController, CanvasRenderingContext2d, DragEvent, Element, Event,
     FileReader, HtmlCanvasElement, HtmlElement, HtmlInputElement, HtmlVideoElement,
-    KeyboardEvent, PointerEvent, TextTrackCue, TextTrackMode,
+    KeyboardEvent, PointerEvent, TextTrack, TextTrackCue, TextTrackKind, TextTrackMode,
 };
 
 #[derive(Clone, Debug)]
@@ -483,6 +483,8 @@ fn open(url: String, resume: Option<PlaybackSnapshot>, fresh: bool) {
     let series_title = s(&context, "seriesTitle");
     text("hudEpTitle", &ep_title);
     text("hudSeriesTitle", &series_title);
+    text("activeServerLabel", "المصدر");
+    text("activeQualityLabel", "الجودة");
     bridge_metadata(&ep_title, &series_title);
     loading("جاري تجهيز الحلقة…");
     show_hud(false);
@@ -653,7 +655,14 @@ fn start_attempt() {
         .map(|ep| catalogue::provider(&ep).to_string())
         .unwrap_or_default();
     text("activeServerLabel", source_name(&source));
-    text("activeQualityLabel", &s(&selected, "quality"));
+    let height = quality_height(&selected);
+    let quality = if selected["type"] != "hls" && height > 0 {
+        format!("{height}p")
+    } else {
+        "الجودة".into()
+    };
+    text("activeQualityLabel", &quality);
+    show("skipIntroBtn", false);
     v.set_preload("auto");
     v.set_volume(settings.volume.clamp(0., 1.));
     v.set_muted(settings.muted);
@@ -708,7 +717,7 @@ fn install_hls(url: &str, session: u64, attempt: u64) -> bool {
     };
     let events = Reflect::get(&constructor, &"Events".into()).unwrap_or(JsValue::UNDEFINED);
     let mut handlers = vec![];
-    for name in ["MANIFEST_PARSED", "ERROR", "LEVEL_SWITCHED"] {
+    for name in ["MANIFEST_PARSED", "ERROR"] {
         let name = name.to_string();
         let instance = engine.clone();
         let event = Reflect::get(&events, &JsValue::from_str(&name))
@@ -774,11 +783,7 @@ fn install_hls(url: &str, session: u64, attempt: u64) -> bool {
                         })]),
                     );
                 }
-                _ => {
-                    if storage("krmzi_quality_mode").as_deref() != Some("manual") {
-                        text("activeQualityLabel", "تلقائي");
-                    }
-                }
+                _ => {}
             }
         }) as Box<dyn FnMut(JsValue, JsValue)>);
         let _ = call(&engine, "on", &args(&[event, callback.as_ref().clone()]));
@@ -1577,14 +1582,24 @@ pub fn open_quality() {
     let Some(episode) = current_episode() else {
         return;
     };
-    let mut content = "<div class=\"sheet-sub-title\">جودة الفيديو</div><button class=\"sheet-row\" data-player-action=\"quality-auto\"><span>تلقائي (تكيف ديناميكي)</span></button>".to_string();
+    let mut content = "<div class=\"sheet-sub-title\">جودة الفيديو</div>".to_string();
     let levels = hls_levels();
+    if levels.len() > 1 {
+        content.push_str("<button class=\"sheet-row\" data-player-action=\"quality-auto\"><span>تلقائي (تكيف ديناميكي)</span></button>");
+    }
     if !levels.is_empty() {
         for (index, height) in levels.iter().enumerate() {
-            content.push_str(&format!("<button class=\"sheet-row\" data-player-action=\"quality-hls\" data-index=\"{index}\"><span>{height}p</span></button>"));
+            let label = if *height > 0 { format!("{height}p") } else { format!("المستوى {}", index + 1) };
+            content.push_str(&format!("<button class=\"sheet-row\" data-player-action=\"quality-hls\" data-index=\"{index}\"><span>{label}</span></button>"));
         }
     } else {
-        for (index, stream) in rows(&episode, "directStreams").iter().enumerate() {
+        let streams = rows(&episode, "directStreams");
+        if streams.iter().filter(|stream| stream["type"] != "hls").count() > 1
+            && storage("krmzi_quality_mode").as_deref() == Some("manual")
+        {
+            content.push_str("<button class=\"sheet-row\" data-player-action=\"quality-default\"><span>الجودة الافتراضية</span></button>");
+        }
+        for (index, stream) in streams.iter().enumerate() {
             if stream["type"] != "hls" {
                 content.push_str(&format!("<button class=\"sheet-row\" data-player-action=\"quality\" data-index=\"{index}\"><span>{}</span></button>",esc(&s(stream,"quality"))));
             }
@@ -1792,6 +1807,7 @@ fn progress() {
     let v = video();
     let duration = v.duration();
     if !duration.is_finite() || duration <= 0. {
+        show("skipIntroBtn", false);
         return;
     }
     let time = v.current_time();
@@ -1826,13 +1842,53 @@ fn progress() {
             show("autoNextCard", false);
         }
     }
-    let is_series_ep = STATE.with(|c| c.borrow().episode.is_some());
-    if is_series_ep && time >= 10. && time <= 90. && duration > 180. {
-        show("skipIntroBtn", true);
-    } else {
-        show("skipIntroBtn", false);
-    }
+    show("skipIntroBtn", intro_end(&v).is_some());
     save_history(false);
+}
+fn intro_end(v: &HtmlVideoElement) -> Option<f64> {
+    if !STATE.with(|c| {
+        let p = c.borrow();
+        p.metadata && p.episode.is_some() && p.embedded.is_none()
+    }) {
+        return None;
+    }
+    let tracks = v.text_tracks()?;
+    let time = v.current_time();
+    let duration = v.duration();
+    (0..tracks.length())
+        .filter_map(|index| tracks.get(index))
+        .filter(|track| track.kind() == TextTrackKind::Chapters)
+        .find_map(|track| {
+            if track.mode() == TextTrackMode::Disabled {
+                track.set_mode(TextTrackMode::Hidden);
+            }
+            let cues = track.cues()?;
+            (0..cues.length()).filter_map(|index| cues.get(index)).find_map(|cue| {
+                let end = cue.end_time();
+                let is_intro = matches!(
+                    cue.text().trim().to_ascii_lowercase().as_str(),
+                    "intro" | "opening" | "الشارة" | "شارة البداية" | "المقدمة"
+                );
+                (is_intro && cue.start_time() <= time && time < end && end <= duration)
+                    .then_some(end)
+            })
+        })
+}
+fn sync_video_quality() {
+    if !STATE.with(|c| {
+        let p = c.borrow();
+        p.metadata && p.episode.is_some() && p.embedded.is_none()
+    }) {
+        return;
+    }
+    let height = video().video_height();
+    if height > 0 {
+        let quality = format!("{height}p");
+        let label = el("activeQualityLabel");
+        if label.text_content().as_deref() != Some(quality.as_str()) {
+            label.set_text_content(Some(&quality));
+        }
+    }
 }
 fn metadata() {
     let settings = STATE.with(|c| {
@@ -1847,6 +1903,7 @@ fn metadata() {
     v.set_playback_rate(settings.rate);
     v.set_volume(settings.volume);
     v.set_muted(settings.muted);
+    sync_video_quality();
     progress();
 }
 fn ready(playing: bool) {
@@ -1907,7 +1964,18 @@ fn show_hud(auto_hide: bool) {
     );
     let timer = if auto_hide {
         Some(Timeout::new(3200, || {
-            if !video().paused() || STATE.with(|c| c.borrow().embedded.is_some()) {
+            let bottom = el("playerHudBottom");
+            let hovering = bottom.matches(":hover").unwrap_or(false)
+                && window()
+                    .match_media("(any-hover: hover)")
+                    .ok()
+                    .flatten()
+                    .is_some_and(|query| query.matches());
+            let focused = bottom.query_selector(":focus-visible").ok().flatten().is_some();
+            if !hovering
+                && !focused
+                && (!video().paused() || STATE.with(|c| c.borrow().embedded.is_some()))
+            {
                 hide_hud();
             }
         }))
@@ -1934,7 +2002,7 @@ fn sync_tool_states() {
             (0..tracks.length()).any(|i| {
                 tracks
                     .get(i)
-                    .is_some_and(|t| t.mode() == TextTrackMode::Showing)
+                    .is_some_and(|t| is_caption_track(&t) && t.mode() == TextTrackMode::Showing)
             })
         })
         .unwrap_or(false);
@@ -1942,8 +2010,6 @@ fn sync_tool_states() {
     let _ = el("toggleSubtitlesBtn").set_attribute("aria-pressed", if sub_showing { "true" } else { "false" });
     let wide = el("mobilePlayer").class_list().contains("wide-mode");
     class("toggleTheaterBtn", "active", wide);
-    let filter = storage("zoet_video_filter").unwrap_or_else(|| "normal".into());
-    class("toggleVideoFilterBtn", "active", filter != "normal");
     let fit = storage("otium_fit_mode").unwrap_or_else(|| "contain".into());
     class("toggleAspectRatioBtn", "active", fit != "contain");
     let fs = document().fullscreen_element().is_some();
@@ -1996,9 +2062,9 @@ pub fn open_tools_sheet() {
     let cur_fit = storage("otium_fit_mode").unwrap_or_else(|| "contain".into());
     let cur_filter = storage("zoet_video_filter").unwrap_or_else(|| "normal".into());
     let cur_offset = STATE.with(|c| c.borrow().sub_offset);
-    let has_subs = v
-        .text_tracks()
-        .is_some_and(|t| t.length() > 0);
+    let has_subs = v.text_tracks().is_some_and(|tracks| {
+        (0..tracks.length()).any(|i| tracks.get(i).as_ref().is_some_and(is_caption_track))
+    });
     let is_locked = STATE.with(|c| c.borrow().locked);
     let is_wide = el("mobilePlayer").class_list().contains("wide-mode");
 
@@ -2076,7 +2142,7 @@ pub fn adjust_sub_delay(delta_seconds: f64) {
     if let Some(tracks) = v.text_tracks() {
         for i in 0..tracks.length() {
             if let Some(track) = tracks.get(i) {
-                if track.mode() == TextTrackMode::Showing {
+                if is_caption_track(&track) && track.mode() == TextTrackMode::Showing {
                     if let Some(cues) = track.cues() {
                         for j in 0..cues.length() {
                             if let Ok(cue_val) = js_sys::Reflect::get_u32(&cues, j) {
@@ -2359,6 +2425,9 @@ fn tick() {
         failed();
     }
 }
+fn is_caption_track(track: &TextTrack) -> bool {
+    matches!(track.kind(), TextTrackKind::Subtitles | TextTrackKind::Captions)
+}
 pub fn toggle_subtitles() {
     let Some(tracks) = video().text_tracks() else {
         return;
@@ -2366,7 +2435,7 @@ pub fn toggle_subtitles() {
     let mut showing = false;
     let mut preferred = None;
     for index in 0..tracks.length() {
-        if let Some(track) = tracks.get(index) {
+        if let Some(track) = tracks.get(index).filter(is_caption_track) {
             showing |= track.mode() == TextTrackMode::Showing;
             if preferred.is_none() || track.language() == "ar" {
                 preferred = Some(track.clone());
@@ -2512,25 +2581,25 @@ fn action(row: Element) {
             }
         }
         "quality-auto" => {
-            store("krmzi_quality_mode", "auto");
-            let has_hls = STATE.with(|c| c.borrow().hls.is_some());
-            app::close_sheet();
-            if has_hls {
-                hls_level(-1);
-                text("activeQualityLabel", "تلقائي");
-            } else {
-                play_direct(None, snapshot(), true);
+            if hls_levels().len() < 2 {
+                return;
             }
+            store("krmzi_quality_mode", "auto");
+            hls_level(-1);
+            app::close_sheet();
+        }
+        "quality-default" => {
+            store("krmzi_quality_mode", "auto");
+            app::close_sheet();
+            play_direct(None, snapshot(), true);
         }
         "quality-hls" => {
-            hls_level(index as i32);
-            store("krmzi_quality_mode", "manual");
             if let Some(height) = hls_levels().get(index) {
-                let name = format!("{height}p");
-                store("krmzi_pref_quality", &name);
-                text("activeQualityLabel", &name);
+                hls_level(index as i32);
+                store("krmzi_quality_mode", "manual");
+                store("krmzi_pref_quality", &format!("{height}p"));
+                app::close_sheet();
             }
-            app::close_sheet();
         }
         "audio-track" => {
             set_hls_audio_track(index as i32);
@@ -2925,6 +2994,7 @@ fn bind_video_events() {
             metadata();
         }
     });
+    on("nativePlayer", "resize", |_| sync_video_quality());
     on("nativePlayer", "canplay", |_| {
         if is_open() {
             ready(false);
@@ -2973,15 +3043,16 @@ pub fn init() {
         show_hud(true);
     });
     on("skipIntroBtn", "click", |_| {
-        seek(85.);
-        show("skipIntroBtn", false);
+        let v = video();
+        if let Some(end) = intro_end(&v) {
+            v.set_current_time(end);
+            progress();
+        }
     });
     on("openServersSheetBtn", "click", |_| open_sources());
     on("openQualitySheetBtn", "click", |_| open_quality());
     on("openEpisodesSheetBtn", "click", |_| all_episodes());
     on("toggleSubtitlesBtn", "click", |_| toggle_subtitles());
-    on("takeSnapshotBtn", "click", |_| take_snapshot());
-    on("toggleVideoFilterBtn", "click", |_| cycle_video_filter());
     on("toggleTheaterBtn", "click", |_| toggle_theater());
     on("toggleFullscreenBtn", "click", |_| fullscreen());
     on("togglePipBtn", "click", |_| pip());
@@ -3038,6 +3109,16 @@ pub fn init() {
         }
     });
     init_sub_drag_and_drop();
+    for event in ["pointerleave", "focusout"] {
+        on("playerHudBottom", event, |_| {
+            if is_open()
+                && !el("playerHudBottom").class_list().contains("hud-hidden")
+                && !STATE.with(|c| c.borrow().locked)
+            {
+                show_hud(true);
+            }
+        });
+    }
     on("playerCanvas", "pointermove", |event| {
         if let Ok(event) = event.dyn_into::<PointerEvent>() {
             if event.pointer_type() == "mouse" {
