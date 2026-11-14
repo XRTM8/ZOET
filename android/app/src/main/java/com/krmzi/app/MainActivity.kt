@@ -573,7 +573,7 @@ class MainActivity : AppCompatActivity() {
         settings.setGeolocationEnabled(false)
         settings.setNeedInitialFocus(false)
         settings.textZoom = 100
-        settings.userAgentString = settings.userAgentString ?: "Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
+        settings.userAgentString = "Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             settings.offscreenPreRaster = true
         }

@@ -512,12 +512,17 @@ fn open(url: String, resume: Option<PlaybackSnapshot>, fresh: bool) {
                 title_ui(&episode);
                 subtitles(&episode);
                 backdrop(&s(&episode, "artwork"));
+                let servers = rows(&episode, "servers");
                 if !rows(&episode, "directStreams").is_empty() {
                     play_direct(None, resume, false);
-                } else if let Some(server) = rows(&episode, "servers").iter().find(|s| s["name"].as_str().map(|n| n.eq_ignore_ascii_case("ok")).unwrap_or(false)) {
+                } else if let Some(server) = servers
+                    .iter()
+                    .find(|s| s["name"].as_str().map(|n| n.eq_ignore_ascii_case("ok")).unwrap_or(false))
+                    .or_else(|| servers.first())
+                {
                     play_embed(server.clone());
                 } else {
-                    error("ما توفرت روابط بث مباشر لهذه الحلقة. جرّب مصدراً أو سيرفراً آخر.");
+                    error("ما توفرت روابط مشاهدة لهذه الحلقة. جرّب مصدراً آخر.");
                 }
                 let is_movie = s(&context, "mediaType") == "movie"
                     || s(&context, "type") == "movie"
@@ -939,13 +944,16 @@ fn fail_final() {
 }
 fn fallback_embed() {
     if let Some(server) = current_episode().and_then(|e| {
-        rows(&e, "servers")
-            .into_iter()
+        let s_list = rows(&e, "servers");
+        s_list
+            .iter()
             .find(|s| s["name"].as_str().map(|n| n.eq_ignore_ascii_case("ok")).unwrap_or(false))
+            .or_else(|| s_list.first())
+            .cloned()
     }) {
         play_embed(server);
     } else {
-        error("تعذر تشغيل روابط البث المباشر. أعد المحاولة أو اختر مصدراً آخر.");
+        error("تعذر تشغيل روابط المشاهدة. أعد المحاولة أو اختر مصدراً آخر.");
     }
 }
 fn play_embed(server: Value) {
