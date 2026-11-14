@@ -18,3 +18,4 @@ scratch/
 src-tauri/target/
 src-tauri/gen/
 *.exe
+*.dll

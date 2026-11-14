@@ -4747,7 +4747,7 @@ checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 
 [[package]]
 name = "zoet-desktop"
-version = "2.9.6"
+version = "3.0.0"
 dependencies = [
  "include_dir",
  "otium-core",

@@ -1,13 +1,13 @@
 [package]
 name = "zoet-desktop"
-version = "2.9.6"
+version = "3.0.0"
 description = "ZOET Desktop Native App"
 authors = ["Otium"]
 edition = "2021"
 
 [lib]
 name = "zoet_desktop_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+crate-type = ["rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
