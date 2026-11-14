@@ -1789,6 +1789,9 @@ fn click(event: Event) {
     if let Some(disp) = button.get_attribute("data-pref-display") {
         store("zoet_display", &disp);
         store("otium_display", &disp);
+        if disp == "tv" {
+            let _ = js_sys::eval("if (window.__TAURI__?.webviewWindow) { window.__TAURI__.webviewWindow.getCurrentWebviewWindow().setFullscreen(true); } else if (document.documentElement.requestFullscreen) { document.documentElement.requestFullscreen(); }");
+        }
         apply_display();
         return;
     }
@@ -2120,6 +2123,11 @@ fn keyboard(event: KeyboardEvent) {
     {
         if back() {
             event.prevent_default();
+            return;
+        }
+        if event.key() == "Escape" {
+            let _ = js_sys::eval("if (window.__TAURI__?.webviewWindow) { const win = window.__TAURI__.webviewWindow.getCurrentWebviewWindow(); win.isFullscreen().then(f => { if (f) win.setFullscreen(false); }); } else if (document.fullscreenElement) { document.exitFullscreen(); }");
+            return;
         }
         return;
     }
@@ -2325,7 +2333,7 @@ fn is_grid_edge_tile(node: &Element) -> bool {
     }
     let mut from_start = 0;
     let mut cur = node.previous_element_sibling();
-    while from_start < 6 {
+    while from_start < 16 {
         let Some(p) = cur else {
             return true;
         };
@@ -2334,7 +2342,7 @@ fn is_grid_edge_tile(node: &Element) -> bool {
     }
     let mut from_end = 0;
     let mut cur_n = node.next_element_sibling();
-    while from_end < 6 {
+    while from_end < 16 {
         let Some(n) = cur_n else {
             return true;
         };
@@ -2566,6 +2574,15 @@ pub fn init() {
             let _ = js_sys::eval("if (window.__TAURI__?.webviewWindow) { window.__TAURI__.webviewWindow.getCurrentWebviewWindow().close(); } else if (window.__TAURI__?.window) { window.__TAURI__.window.getCurrentWindow().close(); } else { window.close(); }");
         });
     }
+    let toggle_fs = |_| {
+        let _ = js_sys::eval("if (window.__TAURI__?.webviewWindow) { const win = window.__TAURI__.webviewWindow.getCurrentWebviewWindow(); win.isFullscreen().then(f => win.setFullscreen(!f)); } else { const doc = document; if (doc.fullscreenElement) { doc.exitFullscreen(); } else { doc.documentElement.requestFullscreen(); } }");
+    };
+    if document().get_element_by_id("fullscreenToggleBtn").is_some() {
+        on("fullscreenToggleBtn", "click", toggle_fs);
+    }
+    if document().get_element_by_id("tvFullscreenBtn").is_some() {
+        on("tvFullscreenBtn", "click", toggle_fs);
+    }
     if document().get_element_by_id("desktopSearchInput").is_some() {
         let sync_desktop_search = |immediate: bool| {
             if let Some(desk_input) = document()
@@ -2737,8 +2754,12 @@ pub fn init() {
         let select = el("displayModeSelect")
             .dyn_into::<web_sys::HtmlSelectElement>()
             .unwrap();
-        store("zoet_display", &select.value());
-        store("otium_display", &select.value());
+        let val = select.value();
+        store("zoet_display", &val);
+        store("otium_display", &val);
+        if val == "tv" {
+            let _ = js_sys::eval("if (window.__TAURI__?.webviewWindow) { window.__TAURI__.webviewWindow.getCurrentWebviewWindow().setFullscreen(true); } else if (document.documentElement.requestFullscreen) { document.documentElement.requestFullscreen(); }");
+        }
         apply_display();
     });
     on("controlsHelpBtn", "click", |_| open_controls_guide());

@@ -17,7 +17,7 @@ pub fn run() {
         .setup(move |app| {
             let target_url = format!("http://127.0.0.1:{port}/index.html");
             if let Some(window) = app.get_webview_window("main") {
-                let _ = window.maximize();
+                let _ = window.set_fullscreen(true);
                 let _ = window.navigate(target_url.parse().expect("valid URL"));
             }
             Ok(())

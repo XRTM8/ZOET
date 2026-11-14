@@ -2239,13 +2239,81 @@ html[data-display='tv'] :focus-visible {
 .sub-size-medium video::cue { font-size: 92% !important; }
 .sub-size-large video::cue { font-size: 122% !important; }
 
-/* Desktop Full-Width Grid & Cinema Modal */
+/* Desktop Full-Width Screen Utilization, Header Docking & Cinema Modal */
+html[data-display='desktop'] .top-nav-inner,
+html[data-display='desktop'] .source-switcher,
+html[data-display='desktop'] .feed-section {
+  max-width: 100% !important;
+  width: 100% !important;
+  margin-inline: 0 !important;
+  padding-inline: clamp(20px, 3vw, 56px) !important;
+}
+html[data-display='desktop'] .top-nav {
+  padding-inline: clamp(20px, 3vw, 56px) !important;
+}
+html[data-display='desktop'] #floatingDockWrap,
+html[data-display='desktop'] .glass-dock-wrap::before {
+  display: none !important;
+}
+html[data-display='desktop'] .content-canvas {
+  padding-bottom: 36px !important;
+}
 html[data-display='desktop'] .desktop-search-container {
   display: block;
 }
+html[data-display='desktop'] .top-nav-end {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px;
+}
+html[data-display='desktop'] .tv-rail-nav {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  margin-inline-start: auto !important;
+}
+html[data-display='desktop'] #tvSearchBtn,
+html[data-display='desktop'] #tvFullscreenBtn {
+  display: none !important;
+}
 html[data-display='desktop'] .media-grid {
-  grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)) !important;
-  gap: 28px 22px !important;
+  grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)) !important;
+  gap: 24px 16px !important;
+  padding: 8px 0 32px !important;
+  contain: none !important;
+}
+@media (min-width: 1600px) {
+  html[data-display='desktop'] .media-grid {
+    grid-template-columns: repeat(auto-fill, minmax(182px, 1fr)) !important;
+    gap: 28px 18px !important;
+  }
+}
+@media (min-width: 2200px) {
+  html[data-display='desktop'] .media-grid {
+    grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)) !important;
+    gap: 32px 22px !important;
+  }
+}
+.fullscreen-toggle-btn {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.fullscreen-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  transform: translateY(-1px);
+}
+.fullscreen-toggle-btn:active {
+  transform: scale(0.94);
 }
 html[data-display='desktop'] .sheet-scrim {
   align-items: center !important;
@@ -2824,21 +2892,34 @@ html[data-display='tv'] .continue-time {
   font-size: clamp(12px, 1vw, 15px);
 }
 
-/* Responsive TV Card Grid: crisp 5 cols on 960px-1359px, 6 cols on 1360px+ */
-html[data-display='tv'] .media-grid {
-  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-  gap: clamp(16px, 2vw, 28px) clamp(14px, 1.6vw, 24px) !important;
-  padding: 10px 8px !important;
-  contain: layout style;
+/* Responsive Fluid TV Card Grid (Zero shrinking, adapts to full width on 1080p, 1440p, 4K) */
+html[data-display='tv'] .top-nav-inner,
+html[data-display='tv'] .source-switcher,
+html[data-display='tv'] .feed-section {
+  max-width: 100% !important;
+  width: 100% !important;
+  margin-inline: 0 !important;
+  padding-inline: clamp(20px, 3vw, 56px) !important;
 }
-@media (min-width: 1360px) {
+html[data-display='tv'] .top-nav {
+  padding-inline: clamp(20px, 3vw, 56px) !important;
+}
+html[data-display='tv'] .media-grid {
+  grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)) !important;
+  gap: 22px 16px !important;
+  padding: 8px 0 32px !important;
+  contain: none !important;
+}
+@media (min-width: 1600px) {
   html[data-display='tv'] .media-grid {
-    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(auto-fill, minmax(182px, 1fr)) !important;
+    gap: 26px 18px !important;
   }
 }
-@media (max-width: 899px) {
+@media (min-width: 2200px) {
   html[data-display='tv'] .media-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)) !important;
+    gap: 30px 22px !important;
   }
 }
 
@@ -2847,7 +2928,7 @@ html[data-display='tv'] .series-tile {
   border-radius: 12px;
   contain: layout style paint;
   content-visibility: auto;
-  contain-intrinsic-size: auto clamp(210px, 32vh, 360px);
+  contain-intrinsic-size: auto 280px;
 }
 html[data-display='tv'] .series-tile .poster-frame {
   border-radius: 12px;

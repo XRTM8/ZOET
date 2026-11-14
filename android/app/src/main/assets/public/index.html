@@ -39,6 +39,10 @@
           <svg class="z-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
           <span>الإعدادات</span>
         </button>
+        <button class="tv-nav-btn" id="tvFullscreenBtn" aria-label="ملء الشاشة" title="ملء الشاشة (F11)">
+          <svg class="z-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+          <span>ملء الشاشة</span>
+        </button>
       </nav>
       <div class="top-nav-end">
         <div class="desktop-search-container">
@@ -46,6 +50,9 @@
           <input type="search" id="desktopSearchInput" placeholder="ابحث عن فيلم أو مسلسل..." autocomplete="off" spellcheck="false" aria-label="بحث فوري">
           <kbd class="desktop-search-shortcut" dir="ltr">Ctrl+K</kbd>
         </div>
+        <button class="win-btn fullscreen-toggle-btn" id="fullscreenToggleBtn" title="ملء الشاشة (F11)" aria-label="ملء الشاشة">
+          <svg class="z-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+        </button>
         <div class="desktop-window-controls hidden" id="desktopWindowControls" aria-label="التحكم بالنافذة">
           <button class="win-btn" id="winMinimizeBtn" title="تصغير" aria-label="تصغير">
             <svg class="z-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 12h12"/></svg>
