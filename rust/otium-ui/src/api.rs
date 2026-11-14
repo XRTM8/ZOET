@@ -173,7 +173,10 @@ fn title(item: &Value) -> String {
 }
 
 fn card(item: &Value) -> Value {
-    let movie = text(item, "kind") == "1";
+    let movie = text(item, "kind") == "1"
+        || text(item, "mediaType") == "movie"
+        || text(item, "type") == "movie"
+        || (text(item, "rootSeries") == "0" && text(item, "kind") != "2");
     let aliases: Vec<String> = ["en_title", "other_title"]
         .iter()
         .map(|key| text(item, key))
@@ -392,7 +395,15 @@ pub async fn call_with_signal(
                 });
                 result["episodes"] = json!(episodes);
             } else {
+                let is_movie = text(&info, "kind") == "1"
+                    || text(&info, "mediaType") == "movie"
+                    || text(&info, "type") == "movie"
+                    || (text(&info, "rootSeries") == "0" && text(&info, "kind") != "2");
                 result["type"] = json!("episode");
+                result["mediaType"] = if is_movie { json!("movie") } else { json!("series") };
+                if is_movie {
+                    result["seriesUrl"] = json!("");
+                }
                 let streams:Vec<Value> = rows(&data).iter().filter_map(|file| {
                     let container = text(file,"container").to_lowercase();
                     let url = text(file,"videoUrl");

@@ -703,6 +703,31 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
+                // Block intrusive ad networks and tracker domains in subframes
+                val isAdHost = host.contains("adsterra") ||
+                    host.contains("propeller") ||
+                    host.contains("popcash") ||
+                    host.contains("popads") ||
+                    host.contains("bet365") ||
+                    host.contains("1xbet") ||
+                    host.contains("monetag") ||
+                    host.contains("hilltopads") ||
+                    host.contains("ad-maven") ||
+                    host.contains("trafficjunky") ||
+                    host.contains("exoclick") ||
+                    host.contains("doubleclick") ||
+                    host.contains("googlesyndication")
+                if (isAdHost) {
+                    return WebResourceResponse(
+                        "text/plain",
+                        "UTF-8",
+                        200,
+                        "OK",
+                        emptyMap(),
+                        ByteArrayInputStream(ByteArray(0))
+                    )
+                }
+
                 val assetResponse = assetLoader.shouldInterceptRequest(requestUri)
                 if (assetResponse != null) return assetResponse
 
@@ -722,8 +747,23 @@ class MainActivity : AppCompatActivity() {
                     return false
                 }
 
-                // Video players and CDNs live in subframes; never block those.
-                if (!request.isForMainFrame) return false
+                // Block external app intent schemes and store redirects
+                if (url.startsWith("intent:") ||
+                    url.startsWith("market:") ||
+                    url.startsWith("tg:") ||
+                    url.startsWith("whatsapp:")
+                ) {
+                    return true
+                }
+
+                // Video players and CDNs live in subframes; never block legitimate CDNs.
+                if (!request.isForMainFrame) {
+                    val subHost = request.url.host?.lowercase() ?: ""
+                    if (subHost.contains("adsterra") || subHost.contains("bet") || subHost.contains("pop")) {
+                        return true
+                    }
+                    return false
+                }
 
                 Log.d(TAG, "Prevented external navigation on main frame: $url")
                 return true

@@ -1563,8 +1563,39 @@ fn render_series_detail(series: &Value) {
         String::new()
     };
 
+    let is_movie = episodes.is_empty()
+        || s(series, "mediaType") == "movie"
+        || s(series, "type") == "movie";
+    let sheet_heading = if is_movie { "تفاصيل الفيلم" } else { "تفاصيل المسلسل" };
+    let episode_section = if is_movie {
+        let movie_url = s(series, "url");
+        format!(
+            "<div class=\"series-episode-heading\"><h5>الفيلم</h5><span>فيلم كامل</span></div>\
+            <div class=\"sheet-episode-grid episode-card-list\">\
+                <button class=\"sheet-episode-btn\" data-action=\"episode\" data-url=\"{}\">\
+                    <span class=\"sheet-ep-num\">{}</span>\
+                    <div class=\"sheet-ep-text\"><strong>تشغيل الفيلم</strong><span>مشاهدة فورية</span></div>\
+                </button>\
+            </div>",
+            esc(&movie_url),
+            icons::PLAY
+        )
+    } else {
+        format!(
+            "<div class=\"series-episode-heading\"><h5>الحلقات</h5><span>{}</span></div>\
+            <div class=\"season-tabs\" id=\"sheetSeasonTabs\">{tabs}</div>\
+            <label class=\"episode-search\">{}\
+                <input id=\"sheetEpisodeSearch\" type=\"search\" placeholder=\"ابحث عن حلقة\" aria-label=\"ابحث عن حلقة\">\
+            </label>\
+            <div class=\"sheet-episode-grid episode-card-list\" id=\"seriesEpisodeList\" data-season=\"{}\"></div>",
+            episodes.len(),
+            icons::SEARCH,
+            esc(seasons.first().map(String::as_str).unwrap_or("1"))
+        )
+    };
+
     open_sheet(
-        "تفاصيل المسلسل",
+        sheet_heading,
         &format!(
             "<div class=\"series-detail-hero\">\
                 <img class=\"series-detail-poster\" src=\"{}\" alt=\"\" referrerpolicy=\"no-referrer\">\
@@ -1582,12 +1613,7 @@ fn render_series_detail(series: &Value) {
             <p class=\"series-detail-story\" id=\"seriesStory\">{}</p>\
             {}\
             {}\
-            <div class=\"series-episode-heading\"><h5>الحلقات</h5><span>{}</span></div>\
-            <div class=\"season-tabs\" id=\"sheetSeasonTabs\">{tabs}</div>\
-            <label class=\"episode-search\">{}\
-                <input id=\"sheetEpisodeSearch\" type=\"search\" placeholder=\"ابحث عن حلقة\" aria-label=\"ابحث عن حلقة\">\
-            </label>\
-            <div class=\"sheet-episode-grid episode-card-list\" id=\"seriesEpisodeList\" data-season=\"{}\"></div>",
+            {}",
             esc(&poster),
             source_name(catalogue::provider(series)),
             ed_pill,
@@ -1599,12 +1625,12 @@ fn render_series_detail(series: &Value) {
             esc(&s(series, "story")),
             story_toggle,
             quick_resume_btn,
-            episodes.len(),
-            icons::SEARCH,
-            esc(seasons.first().map(String::as_str).unwrap_or("1"))
+            episode_section
         ),
     );
-    render_detail_episodes();
+    if !is_movie {
+        render_detail_episodes();
+    }
 }
 fn switch_detail_edition(target_edition: String, title: String) {
     let token = STATE.with(|state| {

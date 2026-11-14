@@ -514,13 +514,18 @@ fn open(url: String, resume: Option<PlaybackSnapshot>, fresh: bool) {
                 backdrop(&s(&episode, "artwork"));
                 if !rows(&episode, "directStreams").is_empty() {
                     play_direct(None, resume, false);
-                } else if let Some(server) = rows(&episode, "servers").first() {
+                } else if let Some(server) = rows(&episode, "servers").iter().find(|s| s["name"].as_str().map(|n| n.eq_ignore_ascii_case("ok")).unwrap_or(false)) {
                     play_embed(server.clone());
                 } else {
-                    error("ما توفرت روابط مشاهدة لهذه الحلقة. جرّب مصدراً آخر.");
+                    error("ما توفرت روابط بث مباشر لهذه الحلقة. جرّب مصدراً أو سيرفراً آخر.");
                 }
+                let is_movie = s(&context, "mediaType") == "movie"
+                    || s(&context, "type") == "movie"
+                    || s(&episode, "mediaType") == "movie"
+                    || s(&episode, "type") == "movie"
+                    || s(&episode, "seriesUrl").is_empty();
                 let series_url = s(&episode, "seriesUrl");
-                if !series_url.is_empty() {
+                if !is_movie && !series_url.is_empty() {
                     load_drawer(series_url, session);
                 } else {
                     text("drawerCount", "فيلم");
@@ -540,16 +545,32 @@ fn open(url: String, resume: Option<PlaybackSnapshot>, fresh: bool) {
     });
 }
 fn initial_index(streams: &[Value]) -> usize {
+    if storage("krmzi_quality_mode").as_deref() == Some("manual") {
+        if let Some(pref) = storage("krmzi_pref_quality") {
+            let target_h = pref
+                .chars()
+                .take_while(char::is_ascii_digit)
+                .collect::<String>()
+                .parse::<u32>()
+                .unwrap_or(0);
+            if target_h > 0 {
+                if let Some(index) = streams
+                    .iter()
+                    .position(|s| quality_height(s) == target_h && s["type"] != "hls")
+                {
+                    return index;
+                }
+            }
+            if let Some(index) = streams
+                .iter()
+                .position(|stream| s(stream, "quality") == pref && stream["type"] != "hls")
+            {
+                return index;
+            }
+        }
+    }
     if let Some(index) = streams.iter().position(|s| s["type"] == "hls") {
         return index;
-    }
-    if storage("krmzi_quality_mode").as_deref() == Some("manual") {
-        if let Some(index) = streams
-            .iter()
-            .position(|s| Some(crate::dom::s(s, "quality")) == storage("krmzi_pref_quality"))
-        {
-            return index;
-        }
     }
     streams
         .iter()
@@ -766,11 +787,10 @@ fn install_hls(url: &str, session: u64, attempt: u64) -> bool {
                     }
                     let _ = Reflect::set(&instance, &"startLevel".into(), &(chosen as u32).into());
                     if manual {
-                        let _ = Reflect::set(
-                            &instance,
-                            &"currentLevel".into(),
-                            &(chosen as u32).into(),
-                        );
+                        let chosen_val = (chosen as u32).into();
+                        let _ = Reflect::set(&instance, &"currentLevel".into(), &chosen_val);
+                        let _ = Reflect::set(&instance, &"loadLevel".into(), &chosen_val);
+                        let _ = Reflect::set(&instance, &"nextLevel".into(), &chosen_val);
                     }
                     let position = STATE.with(|c| c.borrow().settings.time);
                     let _ = call(
@@ -918,10 +938,14 @@ fn fail_final() {
     }
 }
 fn fallback_embed() {
-    if let Some(server) = current_episode().and_then(|e| rows(&e, "servers").first().cloned()) {
+    if let Some(server) = current_episode().and_then(|e| {
+        rows(&e, "servers")
+            .into_iter()
+            .find(|s| s["name"].as_str().map(|n| n.eq_ignore_ascii_case("ok")).unwrap_or(false))
+    }) {
         play_embed(server);
     } else {
-        error("تعذر تشغيل الروابط. أعد المحاولة أو اختر المصدر الآخر.");
+        error("تعذر تشغيل روابط البث المباشر. أعد المحاولة أو اختر مصدراً آخر.");
     }
 }
 fn play_embed(server: Value) {
@@ -1107,6 +1131,15 @@ fn render_drawer() {
         .enumerate()
         .map(|(i, ep)| episode_card(ep, i, &artwork, &current_url))
         .collect::<String>();
+    if episodes.is_empty() {
+        text("drawerCount", "فيلم");
+        show("drawerEpisodeTools", false);
+        html(
+            "drawerEpisodesCarousel",
+            "<p class=\"empty-note\">أنت تشاهد فيلماً.</p>",
+        );
+        return;
+    }
     html(
         "drawerEpisodesCarousel",
         if content.is_empty() {
@@ -1131,6 +1164,13 @@ fn all_episodes() {
         let p = c.borrow();
         (p.episodes.clone(), p.episode.clone().unwrap_or(Value::Null))
     });
+    if episodes.is_empty() {
+        app::open_sheet(
+            "الفيلم",
+            "<p class=\"empty-note\">أنت تشاهد فيلماً سينمائياً كاملاً.</p>",
+        );
+        return;
+    }
     let content = episodes
         .iter()
         .enumerate()
@@ -1584,24 +1624,39 @@ pub fn open_quality() {
     };
     let mut content = "<div class=\"sheet-sub-title\">جودة الفيديو</div>".to_string();
     let levels = hls_levels();
+    let is_manual = storage("krmzi_quality_mode").as_deref() == Some("manual");
+    let pref_quality = storage("krmzi_pref_quality").unwrap_or_default();
     if levels.len() > 1 {
-        content.push_str("<button class=\"sheet-row\" data-player-action=\"quality-auto\"><span>تلقائي (تكيف ديناميكي)</span></button>");
+        let auto_icon = if !is_manual { icons::CHECK } else { "" };
+        content.push_str(&format!(
+            "<button class=\"sheet-row\" data-player-action=\"quality-auto\"><span class=\"sheet-row-label\">{auto_icon}تلقائي (تكيف ديناميكي)</span></button>"
+        ));
     }
     if !levels.is_empty() {
         for (index, height) in levels.iter().enumerate() {
             let label = if *height > 0 { format!("{height}p") } else { format!("المستوى {}", index + 1) };
-            content.push_str(&format!("<button class=\"sheet-row\" data-player-action=\"quality-hls\" data-index=\"{index}\"><span>{label}</span></button>"));
+            let is_active = is_manual && (label == pref_quality || format!("{height}p") == pref_quality);
+            let icon = if is_active { icons::CHECK } else { "" };
+            content.push_str(&format!(
+                "<button class=\"sheet-row\" data-player-action=\"quality-hls\" data-index=\"{index}\"><span class=\"sheet-row-label\">{icon}{label}</span></button>"
+            ));
         }
     } else {
         let streams = rows(&episode, "directStreams");
         if streams.iter().filter(|stream| stream["type"] != "hls").count() > 1
-            && storage("krmzi_quality_mode").as_deref() == Some("manual")
+            && is_manual
         {
             content.push_str("<button class=\"sheet-row\" data-player-action=\"quality-default\"><span>الجودة الافتراضية</span></button>");
         }
         for (index, stream) in streams.iter().enumerate() {
             if stream["type"] != "hls" {
-                content.push_str(&format!("<button class=\"sheet-row\" data-player-action=\"quality\" data-index=\"{index}\"><span>{}</span></button>",esc(&s(stream,"quality"))));
+                let q_str = s(stream, "quality");
+                let is_active = is_manual && (q_str == pref_quality || format!("{}p", quality_height(stream)) == pref_quality);
+                let icon = if is_active { icons::CHECK } else { "" };
+                content.push_str(&format!(
+                    "<button class=\"sheet-row\" data-player-action=\"quality\" data-index=\"{index}\"><span class=\"sheet-row-label\">{icon}{}</span></button>",
+                    esc(&q_str)
+                ));
             }
         }
     }
@@ -1715,7 +1770,10 @@ fn apply_sub_size() {
 fn hls_level(index: i32) {
     let instance = STATE.with(|c| c.borrow().hls.as_ref().map(|h| h.instance.clone()));
     if let Some(h) = instance {
-        let _ = Reflect::set(&h, &"nextLevel".into(), &index.into());
+        let val: JsValue = index.into();
+        let _ = Reflect::set(&h, &"currentLevel".into(), &val);
+        let _ = Reflect::set(&h, &"loadLevel".into(), &val);
+        let _ = Reflect::set(&h, &"nextLevel".into(), &val);
     }
 }
 fn save_history(force: bool) {
@@ -2573,9 +2631,11 @@ fn action(row: Element) {
             let settings = snapshot();
             if let Some(ep) = current_episode() {
                 if let Some(stream) = rows(&ep, "directStreams").get(index) {
+                    let q = s(stream, "quality");
                     store("krmzi_quality_mode", "manual");
-                    store("krmzi_pref_quality", &s(stream, "quality"));
+                    store("krmzi_pref_quality", &q);
                     app::close_sheet();
+                    pill(&format!("تم تثبيت الجودة على {q}"));
                     play_direct(Some(index), settings, true);
                 }
             }
@@ -2587,10 +2647,12 @@ fn action(row: Element) {
             store("krmzi_quality_mode", "auto");
             hls_level(-1);
             app::close_sheet();
+            pill("تم تفعيل الجودة التلقائية (تكيف ديناميكي)");
         }
         "quality-default" => {
             store("krmzi_quality_mode", "auto");
             app::close_sheet();
+            pill("تم تفعيل الجودة الافتراضية");
             play_direct(None, snapshot(), true);
         }
         "quality-hls" => {
@@ -2599,6 +2661,7 @@ fn action(row: Element) {
                 store("krmzi_quality_mode", "manual");
                 store("krmzi_pref_quality", &format!("{height}p"));
                 app::close_sheet();
+                pill(&format!("تم تثبيت الجودة على {height}p"));
             }
         }
         "audio-track" => {

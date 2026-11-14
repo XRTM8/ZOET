@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="preload" href="fonts/tajawal-5.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="fonts/tajawal.css">
-  <link rel="stylesheet" href="styles.css?v=2.9.9">
+  <link rel="stylesheet" href="styles.css?v=3.0.0">
 </head>
 <body>
 <div class="app-frame" id="appFrame">
@@ -236,7 +236,7 @@
               </span>
               <div>
                 <h3>إصدار ZOET</h3>
-                <p id="installedVersionText">v2.9.9</p>
+                <p id="installedVersionText">v3.0.0</p>
               </div>
             </div>
             <button class="check-update-btn" id="manualCheckUpdateBtn">
@@ -457,7 +457,7 @@
     <div class="player-sub-drawer">
       <div class="drawer-topline">
         <span class="drawer-heading">الحلقات</span>
-        <span class="drawer-badge" id="drawerCount">0 حلقة</span>
+        <span class="drawer-badge" id="drawerCount"></span>
       </div>
       <div class="episode-toolbar" id="drawerEpisodeTools">
         <div class="season-tabs" id="drawerSeasonTabs"></div>
@@ -597,8 +597,8 @@
 </script>
 <script src="vendor/hls/hls.min.js" defer></script>
 <script type="module">
-import init from './wasm/otium_ui.js?v=2.9.9';
-init({ module_or_path: './wasm/otium_ui_bg.wasm?v=2.9.9' }).catch(() => { document.getElementById('bootStatus').textContent = 'تعذّر تشغيل التطبيق. أعد فتحه أو تحديث المتصفح.'; });
+import init from './wasm/otium_ui.js?v=3.0.0';
+init({ module_or_path: './wasm/otium_ui_bg.wasm?v=3.0.0' }).catch(() => { document.getElementById('bootStatus').textContent = 'تعذّر تشغيل التطبيق. أعد فتحه أو تحديث المتصفح.'; });
 </script>
 </body>
 </html>

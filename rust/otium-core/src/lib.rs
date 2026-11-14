@@ -376,13 +376,20 @@ impl Engine {
         Ok(parse_series_detail(&html, url))
     }
     async fn ok_streams(&self, id: &str) -> Result<Vec<Value>> {
-        if !compiled(r"^[0-9]+$").is_match(id) {
+        let clean_id = if let Some(stripped) = id.strip_prefix("https://ok.ru/videoembed/") {
+            stripped.trim_end_matches('/')
+        } else if let Some(stripped) = id.strip_prefix("http://ok.ru/videoembed/") {
+            stripped.trim_end_matches('/')
+        } else {
+            id.trim()
+        };
+        if !compiled(r"^[0-9]+$").is_match(clean_id) {
             return Err("Invalid mirror ID".into());
         }
         let html = self
             .text(
-                Url::parse(&format!("https://ok.ru/videoembed/{id}")).unwrap(),
-                6,
+                Url::parse(&format!("https://ok.ru/videoembed/{clean_id}")).unwrap(),
+                12,
                 ok_host,
             )
             .await?;
@@ -405,10 +412,17 @@ impl Engine {
         {
             return Err("Requested mirror is no longer listed for this episode".into());
         }
+        let is_ok = |s: &Value| {
+            let name = s["name"].as_str().unwrap_or("").to_lowercase();
+            let id = s["id"].as_str().unwrap_or("");
+            name.contains("ok")
+                || id.contains("ok.ru")
+                || (id.chars().all(|c| c.is_ascii_digit()) && id.len() >= 8)
+        };
         let pending = FuturesUnordered::new();
         for server in servers
             .iter()
-            .filter(|s| s["name"].as_str().unwrap_or("").eq_ignore_ascii_case("ok"))
+            .filter(|s| is_ok(s))
             .filter(|s| selected_server.is_empty() || s["id"].as_str() == Some(selected_server))
             .take(3)
         {
@@ -1027,8 +1041,15 @@ pub fn parse_ok_streams(html: &str) -> Vec<Value> {
     result
 }
 pub fn embed_url(name: &str, id: &str) -> String {
-    match name.to_lowercase().as_str() {
-        "ok" => format!("https://ok.ru/videoembed/{id}"),
+    let lower_name = name.to_lowercase();
+    if lower_name == "ok" || lower_name == "ok.ru" || (lower_name.contains("ok") && !lower_name.contains("box")) {
+        let clean = id
+            .trim_start_matches("https://ok.ru/videoembed/")
+            .trim_start_matches("http://ok.ru/videoembed/")
+            .trim_end_matches('/');
+        return format!("https://ok.ru/videoembed/{clean}");
+    }
+    match lower_name.as_str() {
         "arab hd" => format!("https://arabhd.onl/embed-{id}.html"),
         "estream" => format!("https://arabveturk.com/embed-{id}.html"),
         "red hd" => format!("https://iplayerhls.com/e/{id}"),
