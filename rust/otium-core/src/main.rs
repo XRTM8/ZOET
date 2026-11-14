@@ -99,7 +99,13 @@ fn bytes(
         status,
         mime,
         Some(body.len() as u64),
-        &[("Cache-Control".into(), "no-store".into())],
+        &[
+            ("Cache-Control".into(), "no-store".into()),
+            ("Access-Control-Allow-Origin".into(), "*".into()),
+            ("Access-Control-Allow-Methods".into(), "GET, HEAD, OPTIONS".into()),
+            ("Access-Control-Allow-Headers".into(), "*".into()),
+            ("Access-Control-Allow-Private-Network".into(), "true".into()),
+        ],
     )?;
     if !head {
         socket.write_all(body)?;
@@ -154,6 +160,9 @@ fn serve(socket: &mut TcpStream, public: &std::path::Path) -> std::io::Result<()
                     "Access-Control-Allow-Methods".into(),
                     "GET, HEAD, OPTIONS".into(),
                 ),
+                ("Access-Control-Allow-Headers".into(), "*".into()),
+                ("Access-Control-Allow-Private-Network".into(), "true".into()),
+                ("Access-Control-Max-Age".into(), "86400".into()),
             ],
         );
     }
@@ -229,7 +238,10 @@ fn serve(socket: &mut TcpStream, public: &std::path::Path) -> std::io::Result<()
         200,
         mime,
         Some(file.metadata()?.len()),
-        &[("Cache-Control".into(), "no-cache".into())],
+        &[
+            ("Cache-Control".into(), "no-cache".into()),
+            ("Access-Control-Allow-Origin".into(), "*".into()),
+        ],
     )?;
     if !head {
         std::io::copy(&mut file, socket)?;
