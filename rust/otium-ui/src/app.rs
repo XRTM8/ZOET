@@ -2042,10 +2042,7 @@ fn apply_display() {
         .unwrap()
         .set_attribute("data-display", mode_str);
     if document().get_element_by_id("desktopWindowControls").is_some() {
-        let in_tauri = Reflect::get(window().as_ref(), &"__TAURI__".into())
-            .ok()
-            .is_some_and(|v| !v.is_undefined() && !v.is_null());
-        show("desktopWindowControls", in_tauri);
+        show("desktopWindowControls", false);
     }
     let active_pref = saved_display.unwrap_or("auto".into());
     if let Some(select) = document()
@@ -2113,6 +2110,11 @@ fn keyboard(event: KeyboardEvent) {
             el.matches("input,textarea,select,[contenteditable=true]")
                 .unwrap_or(false)
         });
+    if event.key() == "F11" {
+        event.prevent_default();
+        let _ = js_sys::eval("if (window.__TAURI__?.webviewWindow) { const win = window.__TAURI__.webviewWindow.getCurrentWebviewWindow(); win.isFullscreen().then(f => win.setFullscreen(!f)); } else { const doc = document; if (doc.fullscreenElement) { doc.exitFullscreen(); } else { doc.documentElement.requestFullscreen(); } }");
+        return;
+    }
     if ["Escape", "BrowserBack", "GoBack"].contains(&event.key().as_str())
         || (event.key() == "Backspace" && !editable)
     {
@@ -2552,45 +2554,16 @@ pub fn init() {
     }
     if document().get_element_by_id("winMinimizeBtn").is_some() {
         on("winMinimizeBtn", "click", |_| {
-            let win = window();
-            if let Ok(tauri) = js_sys::Reflect::get(&win, &wasm_bindgen::JsValue::from_str("__TAURI__")) {
-                if !tauri.is_undefined() {
-                    let _ = js_sys::eval("window.__TAURI__.window.getCurrentWindow().minimize()");
-                    return;
-                }
-            }
+            let _ = js_sys::eval("if (window.__TAURI__?.webviewWindow) { window.__TAURI__.webviewWindow.getCurrentWebviewWindow().minimize(); } else if (window.__TAURI__?.window) { window.__TAURI__.window.getCurrentWindow().minimize(); }");
             if player::is_open() {
                 player::close();
             }
         });
         on("winMaximizeBtn", "click", |_| {
-            let win = window();
-            if let Ok(tauri) = js_sys::Reflect::get(&win, &wasm_bindgen::JsValue::from_str("__TAURI__")) {
-                if !tauri.is_undefined() {
-                    let _ = js_sys::eval("window.__TAURI__.window.getCurrentWindow().toggleMaximize()");
-                    return;
-                }
-            }
-            let doc = document();
-            if doc.fullscreen_element().is_some() {
-                let _ = doc.exit_fullscreen();
-            } else if let Some(el) = doc.document_element() {
-                let _ = el.request_fullscreen();
-            }
+            let _ = js_sys::eval("if (window.__TAURI__?.webviewWindow) { window.__TAURI__.webviewWindow.getCurrentWebviewWindow().toggleMaximize(); } else if (window.__TAURI__?.window) { window.__TAURI__.window.getCurrentWindow().toggleMaximize(); } else { const doc = document; if (doc.fullscreenElement) { doc.exitFullscreen(); } else { doc.documentElement.requestFullscreen(); } }");
         });
         on("winCloseBtn", "click", |_| {
-            let win = window();
-            if let Ok(tauri) = js_sys::Reflect::get(&win, &wasm_bindgen::JsValue::from_str("__TAURI__")) {
-                if !tauri.is_undefined() {
-                    let _ = js_sys::eval("window.__TAURI__.window.getCurrentWindow().close()");
-                    return;
-                }
-            }
-            if player::is_open() {
-                player::close();
-            } else if let Ok(history) = win.history() {
-                let _ = history.back();
-            }
+            let _ = js_sys::eval("if (window.__TAURI__?.webviewWindow) { window.__TAURI__.webviewWindow.getCurrentWebviewWindow().close(); } else if (window.__TAURI__?.window) { window.__TAURI__.window.getCurrentWindow().close(); } else { window.close(); }");
         });
     }
     if document().get_element_by_id("desktopSearchInput").is_some() {
