@@ -39,3 +39,7 @@ pub const FULLSCREEN_ENTER: &str = r#"<svg class="z-ico" viewBox="0 0 24 24" fil
 pub const FULLSCREEN_EXIT: &str = r#"<svg class="z-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8.5h4.5V4M20 8.5h-4.5V4M4 15.5h4.5V20M20 15.5h-4.5V20"/></svg>"#;
 
 pub const CAMERA: &str = r#"<svg class="z-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8.5A2 2 0 0 1 6 6.5h2l1.6-2h4.8l1.6 2H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9Z"/><circle cx="12" cy="13" r="3.2"/></svg>"#;
+
+pub const FAST_FORWARD: &str = r#"<svg class="z-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 19 22 12 13 5 13 19"/><polygon points="2 19 11 12 2 5 2 19"/></svg>"#;
+
+pub const EXTERNAL_LINK: &str = r#"<svg class="z-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>"#;

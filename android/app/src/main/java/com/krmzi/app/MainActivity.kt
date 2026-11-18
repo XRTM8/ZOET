@@ -262,6 +262,36 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
+        fun openExternalPlayer(videoUrl: String, title: String) {
+            runOnUiThread {
+                try {
+                    val cleanUrl = videoUrl.trim()
+                    if (cleanUrl.isEmpty()) return@runOnUiThread
+                    val uri = Uri.parse(cleanUrl)
+                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, "video/*")
+                        putExtra(Intent.EXTRA_TITLE, title)
+                        putExtra("title", title)
+                        // Headers for VLC / MX Player and general external players
+                        val headers = arrayOf(
+                            "User-Agent", "Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+                            "Referer", "https://ok.ru/"
+                        )
+                        putExtra("headers", headers)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    val chooser = Intent.createChooser(intent, "تشغيل عبر مشغل خارجي ($title)").apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(chooser)
+                } catch (e: Exception) {
+                    Log.e(TAG, "External player launch failed: ${e.message}")
+                    Toast.makeText(this@MainActivity, "تعذر تشغيل المشغل الخارجي", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        @JavascriptInterface
         fun openDownloadUrl(downloadUrl: String) {
             downloadAndInstall(downloadUrl)
         }

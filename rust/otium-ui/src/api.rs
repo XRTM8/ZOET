@@ -97,7 +97,21 @@ async fn request(url: &str, signal: Option<&AbortSignal>) -> Result<Value, Strin
     options.set_method("GET");
     options.set_cache(RequestCache::NoStore);
     options.set_signal(Some(&controller.signal()));
-    let request = Request::new_with_str_and_init(url, &options)
+    let resolved_url = if url.starts_with("/api/") {
+        if let Some(custom) = crate::dom::storage("zoet_server_url").or_else(|| crate::dom::storage("otium_server_url")) {
+            let clean = custom.trim().trim_end_matches('/');
+            if !clean.is_empty() {
+                format!("{clean}{url}")
+            } else {
+                url.to_owned()
+            }
+        } else {
+            url.to_owned()
+        }
+    } else {
+        url.to_owned()
+    };
+    let request = Request::new_with_str_and_init(&resolved_url, &options)
         .map_err(|_| "رابط الطلب غير صالح".to_owned())?;
     let _ = request.headers().set("Accept", "application/json");
     let window = web_sys::window().ok_or_else(|| "المتصفح غير متاح".to_owned())?;

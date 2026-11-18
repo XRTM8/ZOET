@@ -2179,6 +2179,14 @@ pub fn open_tools_sheet() {
 
     html.push_str("<div class=\"sheet-sub-title\">إجراءات سريعة</div>");
     html.push_str(&format!(
+        "<button class=\"sheet-row\" data-player-action=\"skip-intro\"><span class=\"sheet-row-label\">{}<span>تخطي شارة البداية (+85 ثانية)</span></span><span class=\"sheet-pill\">مقدمة [I]</span></button>",
+        icons::FAST_FORWARD
+    ));
+    html.push_str(&format!(
+        "<button class=\"sheet-row\" data-player-action=\"open-external\"><span class=\"sheet-row-label\">{}<span>تشغيل بمشغل خارجي (VLC / MX Player)</span></span><span class=\"sheet-pill\">مشغل خارجي</span></button>",
+        icons::EXTERNAL_LINK
+    ));
+    html.push_str(&format!(
         "<button class=\"sheet-row\" data-player-action=\"lock-touch\"><span class=\"sheet-row-label\">{}<span>{}</span></span><span class=\"sheet-pill\">لمنع النقرات العرضية</span></button>",
         icons::LOCK,
         if is_locked { "إلغاء قفل شاشة اللمس" } else { "قفل شاشة اللمس" }
@@ -2233,6 +2241,62 @@ fn reset_sub_delay() {
         pill("مزامنة الترجمة: +0.00 ثانية");
     }
 }
+pub fn skip_intro() {
+    let v = video();
+    let cur = v.current_time();
+    let dur = v.duration();
+    if dur > 0. && cur < dur {
+        let target = (cur + 85.0).min(if dur > 90.0 { dur - 5.0 } else { dur });
+        v.set_current_time(target);
+        pill("تخطي شارة البداية (+85 ث)");
+    }
+}
+
+pub fn open_external_player() {
+    let (stream_url, title) = STATE.with(|c| {
+        let p = c.borrow();
+        let ep = p.episode.as_ref();
+        let stream_url = ep.and_then(|e| {
+            let streams = rows(e, "directStreams");
+            streams.get(p.stream_index).map(|st| s(st, "url"))
+        }).filter(|u| !u.is_empty())
+        .or_else(|| {
+            let src = video().src();
+            if !src.is_empty() { Some(src) } else { None }
+        });
+
+        let ep_title = ep.map(|e| s(e, "title")).unwrap_or_default();
+        let s_title = s(&p.series, "title");
+        let full_title = if !s_title.is_empty() && !ep_title.is_empty() {
+            format!("{s_title} - {ep_title}")
+        } else if !ep_title.is_empty() {
+            ep_title
+        } else if !s_title.is_empty() {
+            s_title
+        } else {
+            "فيديو ZOET".to_owned()
+        };
+
+        (stream_url, full_title)
+    });
+
+    let Some(url) = stream_url else {
+        pill("لا يوجد رابط بث مباشر متاح للتشغيل الخارجي");
+        return;
+    };
+
+    let _ = video().pause();
+    app::close_sheet();
+
+    let native = app::native_call("openExternalPlayer", &[JsValue::from_str(&url), JsValue::from_str(&title)]);
+    if native.is_undefined() {
+        if let Some(win) = web_sys::window() {
+            let _ = win.open_with_url_and_target(&url, "_blank");
+        }
+    }
+    pill("تم فتح المشغل الخارجي");
+}
+
 pub fn take_snapshot() {
     let v = video();
     let width = v.video_width();
@@ -2573,6 +2637,7 @@ pub fn controls_help() {
     let rows = [
         ("Space / K", "تشغيل وإيقاف"),
         ("J / L", "رجوع وتقديم 10 ثوانٍ"),
+        ("I", "تخطي شارة البداية (+85 ثانية)"),
         ("← / →", "5 ثوانٍ · مع Shift: 30 ثانية"),
         ("0–9", "الانتقال لنسبة من الفيديو"),
         ("M", "كتم الصوت"),
@@ -2752,6 +2817,12 @@ fn action(row: Element) {
         "controls-help" => {
             controls_help();
         }
+        "skip-intro" => {
+            skip_intro();
+        }
+        "open-external" => {
+            open_external_player();
+        }
         _ => {}
     }
 }
@@ -2838,6 +2909,7 @@ fn keyboard(event: Event) {
             }
         }
         "e" => all_episodes(),
+        "i" => skip_intro(),
         "n" | "mediatracknext" => next_episode(),
         "a" => fit(),
         "[" | "]" => {

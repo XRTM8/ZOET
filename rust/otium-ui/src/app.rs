@@ -6,7 +6,7 @@ use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
 };
-use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{AbortController, Element, Event, HtmlElement, HtmlInputElement, KeyboardEvent};
 
@@ -1896,6 +1896,40 @@ fn click(event: Event) {
                 let _ = window().open_with_url_and_target(&url, "_blank");
             }
         }
+        Some("download-backup-file") => {
+            let hist = read_records("krmzi_hist");
+            let favs = read_records("krmzi_favs");
+            let backup = json!({
+                "app": "ZOET",
+                "version": 2,
+                "history": hist,
+                "favorites": favs
+            });
+            let text_val = serde_json::to_string_pretty(&backup)
+                .unwrap_or_else(|_| serde_json::to_string(&backup).unwrap_or_default());
+            let array = js_sys::Array::new();
+            array.push(&JsValue::from_str(&text_val));
+            if let Ok(blob) = web_sys::Blob::new_with_str_sequence(&array) {
+                if let Ok(blob_url) = web_sys::Url::create_object_url_with_blob(&blob) {
+                    if let Ok(a) = document().create_element("a") {
+                        let _ = a.set_attribute("href", &blob_url);
+                        let _ = a.set_attribute("download", "zoet-backup.json");
+                        if let Ok(a_el) = a.dyn_into::<HtmlElement>() {
+                            a_el.click();
+                        }
+                    }
+                    let _ = web_sys::Url::revoke_object_url(&blob_url);
+                }
+            }
+            notify("تم تنزيل ملف النسخة الاحتياطية (zoet-backup.json)");
+        }
+        Some("trigger-import-file") => {
+            if let Some(input) = document().get_element_by_id("backupFileInput") {
+                if let Ok(el) = input.dyn_into::<HtmlElement>() {
+                    el.click();
+                }
+            }
+        }
         Some("export-backup") => {
             let hist = read_records("krmzi_hist");
             let favs = read_records("krmzi_favs");
@@ -2003,16 +2037,23 @@ fn open_backup_sheet() {
             "<div class=\"backup-dialog\">\
                 <p class=\"backup-desc\">احفظ سجلك ومفضلتك بدون أي حساب سحابي، وانقلها لأي هاتف أو شاشة ذكية بسهولة.</p>\
                 <div class=\"backup-row\">\
-                    <button class=\"load-more-btn\" data-action=\"export-backup\">{} تصدير ونسخ بياناتي</button>\
+                    <button class=\"load-more-btn\" data-action=\"download-backup-file\">{} حفظ كملف نسخة احتياطية (.json)</button>\
+                    <button class=\"load-more-btn secondary\" data-action=\"trigger-import-file\">{} استعادة من ملف (.json)</button>\
+                </div>\
+                <div class=\"backup-divider\" style=\"margin:14px 0;border-top:1px solid rgba(255,255,255,0.08);\"></div>\
+                <div class=\"backup-row\">\
+                    <button class=\"load-more-btn secondary\" data-action=\"export-backup\">{} نسخ البيانات كرمز نصي للحافظة</button>\
                 </div>\
                 <div class=\"backup-import-section\">\
-                    <label for=\"backupTextarea\">كود النسخة الاحتياطية:</label>\
-                    <textarea id=\"backupTextarea\" rows=\"4\" placeholder=\"ألصق كود النسخة الاحتياطية هنا...\"></textarea>\
-                    <button class=\"load-more-btn secondary\" data-action=\"import-backup\">{} استعادة البيانات الآن</button>\
+                    <label for=\"backupTextarea\">أو ألصق رمز النسخة الاحتياطية يدوياً:</label>\
+                    <textarea id=\"backupTextarea\" rows=\"3\" placeholder=\"ألصق كود النسخة الاحتياطية هنا...\"></textarea>\
+                    <button class=\"load-more-btn secondary\" data-action=\"import-backup\">{} استعادة من النص</button>\
                 </div>\
             </div>",
+            icons::IMPORT,
+            icons::LAYERS,
             icons::COPY,
-            icons::IMPORT
+            icons::CHECK
         ),
     );
 }
@@ -2763,6 +2804,109 @@ pub fn init() {
         apply_display();
     });
     on("controlsHelpBtn", "click", |_| open_controls_guide());
+    if document().get_element_by_id("backupFileInput").is_some() {
+        on("backupFileInput", "change", |_| {
+            let Some(input) = document()
+                .get_element_by_id("backupFileInput")
+                .and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
+            else {
+                return;
+            };
+            let Some(files) = input.files() else {
+                return;
+            };
+            let Some(file) = files.item(0) else {
+                return;
+            };
+            let Ok(reader) = web_sys::FileReader::new() else {
+                return;
+            };
+            let r = reader.clone();
+            let onload = Closure::<dyn FnMut(web_sys::Event)>::new(move |_| {
+                if let Ok(result) = r.result() {
+                    if let Some(text) = result.as_string() {
+                        if let Ok(data) = serde_json::from_str::<Value>(&text) {
+                            if let Some(hist) = data["history"].as_array() {
+                                store("krmzi_hist", &serde_json::to_string(hist).unwrap_or_default());
+                                STATE.with(|s| s.borrow_mut().history = hist.clone());
+                            }
+                            if let Some(favs) = data["favorites"].as_array() {
+                                store("krmzi_favs", &serde_json::to_string(favs).unwrap_or_default());
+                                STATE.with(|s| s.borrow_mut().favorites = favs.clone());
+                            }
+                            render_library();
+                            close_sheet();
+                            notify("تمت استعادة السجل والمفضلة بنجاح من الملف");
+                            return;
+                        }
+                    }
+                }
+                notify("الملف المحدد ليس نسخة احتياطية صالحة لـ ZOET");
+            });
+            reader.set_onload(Some(onload.as_ref().unchecked_ref()));
+            onload.forget();
+            let _ = reader.read_as_text(&file);
+            input.set_value("");
+        });
+    }
+    if document().get_element_by_id("webServerSettingsRow").is_some() {
+        if !native_bool("isNative") {
+            show("webServerSettingsRow", true);
+        }
+        if let Some(saved) = storage("zoet_server_url").or_else(|| storage("otium_server_url")) {
+            if let Some(input) = document()
+                .get_element_by_id("serverUrlInput")
+                .and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
+            {
+                input.set_value(&saved);
+            }
+        }
+        on("saveServerBtn", "click", |_| {
+            if let Some(input) = document()
+                .get_element_by_id("serverUrlInput")
+                .and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
+            {
+                let val = input.value().trim().trim_end_matches('/').to_string();
+                store("zoet_server_url", &val);
+                store("otium_server_url", &val);
+                text(
+                    "serverStatusMsg",
+                    if val.is_empty() {
+                        "تم إلغاء الخادم المخصص (الوضع الافتراضي)"
+                    } else {
+                        "تم حفظ رابط الخادم وتطبيقه بنجاح"
+                    },
+                );
+                notify("تم حفظ إعدادات خادم الاتصال");
+                load_listing(false, true);
+            }
+        });
+        on("testServerBtn", "click", |_| {
+            if let Some(input) = document()
+                .get_element_by_id("serverUrlInput")
+                .and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
+            {
+                let val = input.value().trim().trim_end_matches('/').to_string();
+                if val.is_empty() {
+                    text("serverStatusMsg", "يرجى إدخال رابط خادم أولاً");
+                    return;
+                }
+                text("serverStatusMsg", "جاري فحص الاتصال بالخادم...");
+                let test_url = format!("{val}/api/health");
+                spawn_local(async move {
+                    match api::request_json(&test_url, None).await {
+                        Ok(data) => {
+                            let eng = data["engine"].as_str().unwrap_or("ok");
+                            text("serverStatusMsg", &format!("الاتصال ناجح! محرك الخادم: {eng}"));
+                        }
+                        Err(err) => {
+                            text("serverStatusMsg", &format!("تعذر الاتصال بالخادم: {err}"));
+                        }
+                    }
+                });
+            }
+        });
+    }
     listen(document().as_ref(), "click", click);
     listen(document().as_ref(), "input", |event| {
         if event
