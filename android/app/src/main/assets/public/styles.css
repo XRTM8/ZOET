@@ -3236,49 +3236,50 @@ html[data-display='tv'] .top-nav {
   padding-inline: clamp(20px, 3vw, 56px) !important;
 }
 html[data-display='tv'] .media-grid {
-  grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)) !important;
-  gap: 22px 16px !important;
-  padding: 8px 0 32px !important;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)) !important;
+  gap: 28px 20px !important;
+  padding: 12px 0 48px !important;
   contain: none !important;
 }
 @media (min-width: 1600px) {
   html[data-display='tv'] .media-grid {
-    grid-template-columns: repeat(auto-fill, minmax(182px, 1fr)) !important;
-    gap: 26px 18px !important;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)) !important;
+    gap: 32px 24px !important;
   }
 }
 @media (min-width: 2200px) {
   html[data-display='tv'] .media-grid {
-    grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)) !important;
-    gap: 30px 22px !important;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)) !important;
+    gap: 38px 28px !important;
   }
 }
 
-/* Fast Card Paint + Single Sharp Focus Ring (ZERO double glow / ZERO 60px shadow lag) */
+/* Fast Card Paint + High-Contrast 10-foot Focus Ring (scale 1.09 + bold white border) */
 html[data-display='tv'] .series-tile {
-  border-radius: 12px;
+  border-radius: 14px;
   contain: layout style paint;
   content-visibility: auto;
-  contain-intrinsic-size: auto 280px;
+  contain-intrinsic-size: auto 340px;
 }
 html[data-display='tv'] .series-tile .poster-frame {
-  border-radius: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.12);
   background: #0c0e13;
   box-shadow: none !important;
 }
 html[data-display='tv'] .series-tile-body {
-  padding: 8px 2px 0;
+  padding: 10px 4px 0;
 }
 html[data-display='tv'] .series-tile-title {
-  font-size: clamp(13px, 1.1vw, 17px) !important;
+  font-size: clamp(15px, 1.3vw, 19px) !important;
   font-weight: 700;
   color: #cbd5e1;
   line-height: 1.35;
 }
 html[data-display='tv'] .series-tile-sub {
-  font-size: clamp(11px, 0.9vw, 14px) !important;
+  font-size: clamp(13px, 1.05vw, 16px) !important;
   color: #8492a6;
+  font-weight: 600;
 }
 html[data-display='tv'] .provider-tag {
   font-size: clamp(10px, 0.8vw, 13px) !important;
@@ -3288,32 +3289,46 @@ html[data-display='tv'] .provider-tag {
   color: #cbd5e1;
 }
 html[data-display='tv'] .edition-badge {
-  top: 6px;
-  right: 6px;
-  padding: 3px 8px;
-  font-size: clamp(10px, 0.85vw, 13px);
-  background: rgba(8, 10, 14, 0.9);
+  top: 8px;
+  right: 8px;
+  padding: 4px 10px;
+  font-size: clamp(12px, 0.95vw, 15px);
+  background: rgba(8, 10, 14, 0.92);
+  border-radius: 8px;
+}
+html[data-display='tv'] .poster-rating {
+  bottom: 8px !important;
+  left: 8px !important;
+  padding: 3px 8px !important;
+  font-size: 13px !important;
+}
+html[data-display='tv'] .poster-type-badge {
+  bottom: 8px !important;
+  right: 8px !important;
+  padding: 3px 8px !important;
+  font-size: 12px !important;
 }
 
-/* Single High-Contrast White Focus Ring ONLY on focused card/control */
+/* High-Contrast TV Focus State: 9% Pop + Bright White Border & Elevated Glow */
 html[data-display='tv'] .series-tile:focus {
-  transform: scale(1.03) !important;
-  z-index: 25 !important;
+  transform: scale(1.09) !important;
+  z-index: 35 !important;
   outline: none !important;
   box-shadow: none !important;
 }
 html[data-display='tv'] .series-tile:focus .poster-frame {
   border-color: #ffffff !important;
-  box-shadow: 0 0 0 2.5px #ffffff !important;
+  box-shadow: 0 0 0 3.5px #ffffff, 0 16px 36px rgba(0, 0, 0, 0.95) !important;
 }
 html[data-display='tv'] .series-tile:focus .series-tile-title {
   color: #ffffff !important;
+  font-weight: 800 !important;
 }
 html[data-display='tv'] :is(button:not(.series-tile), input, select, [role='button'], [tabindex='0']):focus {
-  outline: 2.5px solid #ffffff !important;
-  outline-offset: 2px;
-  box-shadow: none !important;
-  z-index: 20;
+  outline: 3.5px solid #ffffff !important;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.8), 0 8px 24px rgba(0, 0, 0, 0.9) !important;
+  z-index: 25;
 }
 
 /* 4. Pagination & Offline */

@@ -571,7 +571,12 @@ class MainActivity : AppCompatActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
             setBackgroundColor(Color.TRANSPARENT)
-            setLayerType(View.LAYER_TYPE_NONE, null)
+            val isTv = KrmziBridge().isTelevision()
+            if (isTv) {
+                setLayerType(View.LAYER_TYPE_HARDWARE, null)
+            } else {
+                setLayerType(View.LAYER_TYPE_NONE, null)
+            }
             overScrollMode = View.OVER_SCROLL_NEVER
             isVerticalScrollBarEnabled = false
             isHorizontalScrollBarEnabled = false
@@ -602,8 +607,13 @@ class MainActivity : AppCompatActivity() {
         settings.setSupportZoom(false)
         settings.setGeolocationEnabled(false)
         settings.setNeedInitialFocus(false)
-        settings.textZoom = 100
-        settings.userAgentString = "Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
+        if (KrmziBridge().isTelevision()) {
+            settings.userAgentString = "Mozilla/5.0 (Linux; Android 14; Large Screen; Android TV) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+            settings.textZoom = 105
+        } else {
+            settings.textZoom = 100
+            settings.userAgentString = "Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             settings.offscreenPreRaster = true
         }

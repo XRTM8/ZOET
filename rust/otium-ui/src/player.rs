@@ -1982,6 +1982,7 @@ pub fn close() {
     show("unlockTouchBtn", false);
     release_media();
     show("mobilePlayer", false);
+    app::restore_focus();
     show("playerSpinner", false);
     show("skipIntroBtn", false);
     show("autoNextCard", false);
@@ -2155,12 +2156,12 @@ pub fn pill(message: &str) {
     let timer = Timeout::new(1800, || show("swipeIndicator", false));
     STATE.with(|c| c.borrow_mut().pill = Some(timer));
 }
-fn is_hud_visible() -> bool {
+pub fn is_hud_visible() -> bool {
     !el("playerHudTop").class_list().contains("hud-hidden")
         || !el("playerHudBottom").class_list().contains("hud-hidden")
         || !el("hudCenter").class_list().contains("hud-hidden")
 }
-fn hide_hud() {
+pub fn hide_hud() {
     STATE.with(|c| {
         c.borrow_mut().hud = None;
     });
@@ -3087,11 +3088,11 @@ fn keyboard(event: Event) {
 pub(crate) fn remote_arrow(key: &str) {
     if el("playerHudTop").class_list().contains("hud-hidden") {
         if key == "arrowleft" || key == "arrowright" {
-            seek(if key == "arrowleft" { -10. } else { 10. });
-            for id in ["playerHudTop", "playerHudBottom", "hudCenter"] {
-                class(id, "hud-hidden", true);
-            }
-            focus("playerCanvas");
+            let delta = if key == "arrowleft" { -10. } else { 10. };
+            seek(delta);
+            let label = if delta > 0. { "+10 ثوانٍ" } else { "-10 ثوانٍ" };
+            pill(label);
+            show_hud(true);
             return;
         }
         show_hud(false);

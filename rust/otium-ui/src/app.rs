@@ -131,7 +131,52 @@ pub fn open_sheet(title: &str, markup: &str) {
     text("sheetTitle", title);
     html("sheetBody", markup);
     show("sheetBackdrop", true);
+    let is_tv = document()
+        .document_element()
+        .and_then(|e| e.get_attribute("data-display"))
+        .as_deref()
+        == Some("tv");
+    if is_tv {
+        // On TV, focus the primary action or first row, not the close button
+        if let Some(btn) = el("sheetBody")
+            .query_selector(".series-resume-btn, .sheet-row, .episode-card")
+            .ok()
+            .flatten()
+        {
+            if let Ok(elem) = btn.dyn_into::<HtmlElement>() {
+                let _ = elem.focus();
+                return;
+            }
+        }
+    }
     focus("closeSheetBtn");
+}
+pub fn restore_focus() {
+    STATE.with(|s| {
+        let mut s = s.borrow_mut();
+        if let Some(origin) = s.sheet_origin.take() {
+            let _ = origin.focus();
+            tv_scroll_into_view(&origin);
+            return;
+        }
+    });
+    let is_tv = document()
+        .document_element()
+        .and_then(|e| e.get_attribute("data-display"))
+        .as_deref()
+        == Some("tv");
+    if is_tv {
+        if let Some(card) = document()
+            .query_selector(".media-grid:not(.hidden) .series-tile")
+            .ok()
+            .flatten()
+        {
+            if let Ok(elem) = card.dyn_into::<HtmlElement>() {
+                let _ = elem.focus();
+                tv_scroll_into_view(&elem);
+            }
+        }
+    }
 }
 pub fn close_sheet() {
     player::sheet_closed();
@@ -141,6 +186,7 @@ pub fn close_sheet() {
         show("sheetBackdrop", false);
         if let Some(origin) = s.sheet_origin.take() {
             let _ = origin.focus();
+            tv_scroll_into_view(&origin);
         }
     });
 }
@@ -653,7 +699,7 @@ fn render_grid(id: &str, items: &[Value]) {
     let mut retained = HashSet::new();
     let mut previous: Option<Element> = None;
     let holder = document().create_element("div").unwrap();
-    for item in items {
+    for (i, item) in items.iter().enumerate() {
         let url = s(item, "url");
         let markup = card(item);
         let node = if let Some(node) = nodes
@@ -674,6 +720,7 @@ fn render_grid(id: &str, items: &[Value]) {
             }
             node
         };
+        let _ = node.set_attribute("data-index", &i.to_string());
         let next = previous
             .as_ref()
             .and_then(Element::next_element_sibling)
@@ -2246,29 +2293,28 @@ fn tv_scroll_into_view(target: &HtmlElement) {
     }
 }
 fn grid_columns(grid: &Element) -> usize {
-    if let Ok(Some(style)) = window().get_computed_style(grid) {
-        if let Ok(cols) = style.get_property_value("grid-template-columns") {
-            let count = cols.split_whitespace().filter(|s| !s.is_empty()).count();
-            if count > 0 {
-                return count;
-            }
-        }
+    let width = grid.client_width();
+    let width = if width > 0 {
+        width as f64
+    } else {
+        window()
+            .inner_width()
+            .ok()
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1280.0)
+    };
+    let is_tv = document()
+        .document_element()
+        .and_then(|e| e.get_attribute("data-display"))
+        .as_deref()
+        == Some("tv");
+    if is_tv {
+        ((width + 20.0) / 250.0).floor().max(1.0) as usize
+    } else if width >= 1024.0 {
+        ((width + 16.0) / 200.0).floor().max(1.0) as usize
+    } else {
+        ((width + 12.0) / 140.0).floor().max(1.0) as usize
     }
-    let children = grid.children();
-    let total = (children.length() as usize).min(10);
-    if total == 0 {
-        return 1;
-    }
-    let y0 = children.item(0).unwrap().get_bounding_client_rect().top();
-    let mut cols = 1;
-    for i in 1..total {
-        if (children.item(i as u32).unwrap().get_bounding_client_rect().top() - y0).abs() < 16.0 {
-            cols += 1;
-        } else {
-            break;
-        }
-    }
-    cols
 }
 fn grid_navigate(grid: &Element, current: &Element, key: &str) -> bool {
     let children = grid.children();
@@ -2276,12 +2322,18 @@ fn grid_navigate(grid: &Element, current: &Element, key: &str) -> bool {
     if len == 0 {
         return false;
     }
-    let mut idx = 0usize;
-    let mut prev = current.previous_element_sibling();
-    while let Some(p) = prev {
-        idx += 1;
-        prev = p.previous_element_sibling();
-    }
+    let idx = current
+        .get_attribute("data-index")
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or_else(|| {
+            let mut c = 0;
+            let mut p = current.previous_element_sibling();
+            while let Some(prev) = p {
+                c += 1;
+                p = prev.previous_element_sibling();
+            }
+            c
+        });
     if idx >= len {
         return false;
     }
@@ -2291,6 +2343,11 @@ fn grid_navigate(grid: &Element, current: &Element, key: &str) -> bool {
         .and_then(|e| e.get_attribute("dir"))
         .as_deref()
         != Some("ltr");
+    let is_tv = document()
+        .document_element()
+        .and_then(|e| e.get_attribute("data-display"))
+        .as_deref()
+        == Some("tv");
     let target_idx: Option<usize> = match key {
         "ArrowLeft" | "ArrowRight" => {
             let step_next = if is_rtl {
@@ -2322,6 +2379,19 @@ fn grid_navigate(grid: &Element, current: &Element, key: &str) -> bool {
         "ArrowUp" => {
             if idx >= cols {
                 Some(idx - cols)
+            } else if is_tv {
+                let top_btn = if el("tabMovies").class_list().contains("active") {
+                    "tabMovies"
+                } else if el("tabSeries").class_list().contains("active") {
+                    "tabSeries"
+                } else {
+                    "tvSearchBtn"
+                };
+                focus(top_btn);
+                if let Ok(Some(canvas)) = grid.closest("#contentCanvas") {
+                    canvas.set_scroll_top(0);
+                }
+                return true;
             } else {
                 None
             }
@@ -2348,6 +2418,37 @@ fn grid_navigate(grid: &Element, current: &Element, key: &str) -> bool {
     false
 }
 fn list_navigate(current: &Element, key: &str) -> bool {
+    let is_tv = document()
+        .document_element()
+        .and_then(|e| e.get_attribute("data-display"))
+        .as_deref()
+        == Some("tv");
+    if is_tv {
+        if key == "ArrowRight" {
+            if let Some(resume_btn) = document()
+                .query_selector(".series-resume-btn")
+                .ok()
+                .flatten()
+            {
+                if let Ok(elem) = resume_btn.dyn_into::<HtmlElement>() {
+                    let _ = elem.focus();
+                    return true;
+                }
+            }
+        }
+        if key == "ArrowUp" && current.previous_element_sibling().is_none() {
+            if let Some(season_tab) = document()
+                .query_selector(".season-tab.active, .season-tab")
+                .ok()
+                .flatten()
+            {
+                if let Ok(elem) = season_tab.dyn_into::<HtmlElement>() {
+                    let _ = elem.focus();
+                    return true;
+                }
+            }
+        }
+    }
     let sibling = match key {
         "ArrowDown" => current.next_element_sibling(),
         "ArrowUp" => current.previous_element_sibling(),
@@ -2403,6 +2504,55 @@ pub fn remote_focus_key(key: &str) {
         _ => None,
     };
     if let Some(curr) = current {
+        if is_tv && key == "ArrowDown" {
+            let in_top = curr.closest(".top-nav").ok().flatten().is_some()
+                || curr.id() == "tabSeries"
+                || curr.id() == "tabMovies"
+                || curr.id() == "tvLibraryBtn"
+                || curr.id() == "tvSearchBtn"
+                || curr.id() == "tvSettingsBtn";
+            if in_top {
+                let grid_id = if el("tabMovies").class_list().contains("active") {
+                    "moviesGrid"
+                } else {
+                    "seriesGrid"
+                };
+                if let Some(first_card) = el(grid_id)
+                    .first_element_child()
+                    .and_then(|e| e.dyn_into::<HtmlElement>().ok())
+                {
+                    let _ = first_card.focus();
+                    tv_scroll_into_view(&first_card);
+                    return;
+                }
+            }
+        }
+        if is_tv && curr.class_list().contains("series-resume-btn") && key == "ArrowLeft" {
+            if let Some(first_ep) = document()
+                .query_selector(".sheet-episode-grid .episode-card")
+                .ok()
+                .flatten()
+            {
+                if let Ok(elem) = first_ep.dyn_into::<HtmlElement>() {
+                    let _ = elem.focus();
+                    tv_scroll_into_view(&elem);
+                    return;
+                }
+            }
+        }
+        if is_tv && curr.class_list().contains("season-tab") && key == "ArrowDown" {
+            if let Some(first_ep) = document()
+                .query_selector(".sheet-episode-grid .episode-card")
+                .ok()
+                .flatten()
+            {
+                if let Ok(elem) = first_ep.dyn_into::<HtmlElement>() {
+                    let _ = elem.focus();
+                    tv_scroll_into_view(&elem);
+                    return;
+                }
+            }
+        }
         if let Ok(Some(grid)) = curr.closest(".media-grid") {
             if grid_navigate(&grid, curr, key) {
                 return;
@@ -2953,6 +3103,10 @@ pub fn init() {
                 return true;
             }
             if player::is_open() {
+                if player::is_hud_visible() {
+                    player::hide_hud();
+                    return true;
+                }
                 player::close();
                 return true;
             }
