@@ -186,9 +186,10 @@ impl Engine {
                 .get(url.clone())
                 .header("Accept-Language", "ar,en-US;q=0.9,en;q=0.8");
             if media {
+                let (origin, referer) = media_origin_and_referer(&url);
                 request = request
-                    .header("Origin", "https://ok.ru")
-                    .header("Referer", "https://ok.ru/");
+                    .header("Origin", origin)
+                    .header("Referer", referer);
             } else {
                 request = request.header("Referer", format!("{ORIGIN}/"));
             }
@@ -395,6 +396,45 @@ impl Engine {
             .await?;
         Ok(parse_ok_streams(&html))
     }
+    async fn embed_streams(&self, _name: &str, embed_url: &str) -> Result<Vec<Value>> {
+        let parsed_url = match Url::parse(embed_url) {
+            Ok(u) => u,
+            Err(_) => return Ok(vec![]),
+        };
+        if !embed_host(&parsed_url) {
+            return Ok(vec![]);
+        }
+        let html = match self.text(parsed_url, 8, embed_host).await {
+            Ok(h) => h,
+            Err(_) => return Ok(vec![]),
+        };
+        let unpacked = unpack_dean_edwards(&html).unwrap_or_default();
+
+        let mut streams = Vec::new();
+        let m3u8_re = compiled(r#"https?://[^\s"'<>\\]+\.m3u8[^\s"'<>\\]*"#);
+        if let Some(m) = m3u8_re.find(&unpacked).or_else(|| m3u8_re.find(&html)) {
+            let stream_url = m.as_str().replace("\\/", "/");
+            streams.push(json!({
+                "quality": "تلقائي",
+                "type": "hls",
+                "url": stream_url
+            }));
+            return Ok(streams);
+        }
+
+        let mp4_re = compiled(r#"https?://[^\s"'<>\\]+\.mp4[^\s"'<>\\]*"#);
+        if let Some(m) = mp4_re.find(&unpacked).or_else(|| mp4_re.find(&html)) {
+            let stream_url = m.as_str().replace("\\/", "/");
+            streams.push(json!({
+                "quality": "1080p",
+                "type": "mp4",
+                "url": stream_url
+            }));
+            return Ok(streams);
+        }
+
+        Ok(streams)
+    }
     async fn episode_detail(&self, url: &str, selected_server: &str) -> Result<Value> {
         let html = self
             .text(
@@ -420,15 +460,28 @@ impl Engine {
                 || (id.chars().all(|c| c.is_ascii_digit()) && id.len() >= 8)
         };
         let pending = FuturesUnordered::new();
-        for server in servers
-            .iter()
-            .filter(|s| is_ok(s))
-            .filter(|s| selected_server.is_empty() || s["id"].as_str() == Some(selected_server))
-            .take(3)
-        {
+        let targets: Vec<Value> = if !selected_server.is_empty() {
+            servers
+                .iter()
+                .filter(|s| s["id"].as_str() == Some(selected_server))
+                .cloned()
+                .collect()
+        } else {
+            servers.iter().take(4).cloned().collect()
+        };
+        for server in targets {
             let id = server["id"].as_str().unwrap_or("").to_owned();
+            let name = server["name"].as_str().unwrap_or("").to_owned();
+            let embed = server["embedUrl"].as_str().unwrap_or("").to_owned();
+            let is_ok_srv = is_ok(&server);
             pending.push(async move {
-                let streams = self.ok_streams(&id).await.unwrap_or_default();
+                let streams = if is_ok_srv {
+                    self.ok_streams(&id).await.unwrap_or_default()
+                } else if !embed.is_empty() {
+                    self.embed_streams(&name, &embed).await.unwrap_or_default()
+                } else {
+                    vec![]
+                };
                 (id, streams)
             });
         }
@@ -436,8 +489,9 @@ impl Engine {
         result["directStreams"] = json!(streams);
         if let Some(servers) = result["servers"].as_array_mut() {
             for server in servers.iter_mut() {
+                let id = server["id"].as_str().unwrap_or("");
                 server["hasDirectStream"] =
-                    json!(!chosen.is_empty() && server["id"].as_str() == Some(&chosen));
+                    json!(!chosen.is_empty() && id == chosen);
             }
             servers.sort_by_key(|s| !s["hasDirectStream"].as_bool().unwrap_or(false));
         }
@@ -637,16 +691,75 @@ fn ok_host(url: &Url) -> bool {
 fn cinemana_host(url: &Url) -> bool {
     allowed_authority(url) && url.host_str() == Some("cinemana.shabakaty.com")
 }
-fn media_host(url: &Url) -> bool {
+pub fn embed_host(url: &Url) -> bool {
     allowed_authority(url)
         && url
             .host_str()
             .map(|h| {
-                ["okcdn.ru", "vkuser.net"]
-                    .iter()
-                    .any(|base| h == *base || h.ends_with(&format!(".{base}")))
+                [
+                    "arabhd.onl",
+                    "arabveturk.com",
+                    "iplayerhls.com",
+                    "youdboox.com",
+                    "extreamnow.org",
+                    "embedo.co",
+                    "dailymotion.com",
+                    "ok.ru",
+                    "krmzi.org",
+                ]
+                .iter()
+                .any(|base| h == *base || h.ends_with(&format!(".{base}")))
             })
             .unwrap_or(false)
+}
+pub fn media_host(url: &Url) -> bool {
+    allowed_authority(url)
+        && url
+            .host_str()
+            .map(|h| {
+                [
+                    "okcdn.ru",
+                    "vkuser.net",
+                    "artrk.online",
+                    "premilkyway.com",
+                    "individualbranding.cyou",
+                    "huntrexus.com",
+                    "iplayerhls.com",
+                    "arabhd.onl",
+                    "arabveturk.com",
+                    "youdboox.com",
+                    "extreamnow.org",
+                    "embedo.co",
+                ]
+                .iter()
+                .any(|base| h == *base || h.ends_with(&format!(".{base}")))
+            })
+            .unwrap_or(false)
+}
+fn media_origin_and_referer(url: &Url) -> (&'static str, &'static str) {
+    if let Some(host) = url.host_str() {
+        if host.contains("artrk.online") || host.contains("arabhd") {
+            ("https://arabhd.onl", "https://arabhd.onl/")
+        } else if host.contains("arabveturk") {
+            ("https://arabveturk.com", "https://arabveturk.com/")
+        } else if host.contains("premilkyway")
+            || host.contains("iplayerhls")
+            || host.contains("individualbranding")
+            || host.contains("huntrexus")
+        {
+            ("https://iplayerhls.com", "https://iplayerhls.com/")
+        } else if host.contains("youdboox") {
+            ("https://youdboox.com", "https://youdboox.com/")
+        } else if host.contains("extreamnow") {
+            ("https://extreamnow.org", "https://extreamnow.org/")
+        } else if host.contains("embedo") {
+            ("https://embedo.co", "https://embedo.co/")
+        } else {
+            ("https://ok.ru", "https://ok.ru/")
+        }
+    } else {
+        ("https://ok.ru", "https://ok.ru/")
+    }
 }
 fn subtitle_host(url: &Url) -> bool {
     allowed_authority(url)
@@ -925,6 +1038,7 @@ pub fn parse_cards(html: &str, kind: &str) -> Vec<Value> {
     }
     result
 }
+
 pub fn has_next_page(html: &str, page: u32, series: bool) -> bool {
     let marker = if series {
         format!("series-list/page/{}/", page + 1)
@@ -1040,6 +1154,70 @@ pub fn parse_ok_streams(html: &str) -> Vec<Value> {
     }
     result
 }
+pub fn unpack_dean_edwards(html: &str) -> Option<String> {
+    let eval_idx = html.find("eval(function(p,a,c,k,e,d)")?;
+    let after_eval = &html[eval_idx..];
+    let call_idx = after_eval.find("}(")? + 2;
+    let after_call = &after_eval[call_idx..];
+
+    let split_token = if after_call.contains(".split('|')") {
+        ".split('|')"
+    } else if after_call.contains(".split(\"|\")") {
+        ".split(\"|\")"
+    } else {
+        return None;
+    };
+    let split_idx = after_call.rfind(split_token)?;
+    let quote_char = after_call[..split_idx]
+        .chars()
+        .rev()
+        .find(|&c| c == '\'' || c == '"')?;
+    let k_end = after_call[..split_idx].rfind(quote_char)?;
+    let k_start = after_call[..k_end].rfind(quote_char)?;
+    let k_raw = &after_call[k_start + 1..k_end];
+    let k: Vec<&str> = k_raw.split('|').collect();
+
+    let before_k = after_call[..k_start].trim().trim_end_matches(',');
+    let mut parts = before_k.rsplitn(3, ',');
+    let _c_str = parts.next()?.trim();
+    let a_str = parts.next()?.trim();
+    let p_raw = parts.next()?.trim();
+
+    let a: u32 = a_str.parse().ok()?;
+    if !(2..=62).contains(&a) {
+        return None;
+    }
+
+    let p_trimmed = p_raw.trim_matches('\'').trim_matches('"');
+    let re = compiled(r"\b([0-9a-zA-Z]+)\b");
+    let unpacked = re.replace_all(p_trimmed, |caps: &regex::Captures| {
+        let tok = &caps[1];
+        if let Some(idx) = decode_base_token(tok, a) {
+            if let Some(&word) = k.get(idx as usize) {
+                if !word.is_empty() {
+                    return word.to_string();
+                }
+            }
+        }
+        tok.to_string()
+    });
+
+    Some(unpacked.into_owned())
+}
+
+fn decode_base_token(s: &str, base: u32) -> Option<u32> {
+    const CHARSET: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    let mut val: u32 = 0;
+    for &b in s.as_bytes() {
+        let digit = CHARSET.iter().position(|&c| c == b)? as u32;
+        if digit >= base {
+            return None;
+        }
+        val = val.checked_mul(base)?.checked_add(digit)?;
+    }
+    Some(val)
+}
+
 pub fn embed_url(name: &str, id: &str) -> String {
     let lower_name = name.to_lowercase();
     if lower_name == "ok" || lower_name == "ok.ru" || (lower_name.contains("ok") && !lower_name.contains("box")) {

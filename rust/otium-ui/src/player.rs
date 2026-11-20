@@ -677,10 +677,20 @@ fn start_attempt() {
     } else {
         "جاري تحميل الفيديو…"
     });
-    let source = current_episode()
-        .map(|ep| catalogue::provider(&ep).to_string())
-        .unwrap_or_default();
-    text("activeServerLabel", source_name(&source));
+    let playing_server = current_episode().and_then(|ep| {
+        rows(&ep, "servers")
+            .into_iter()
+            .find(|s| s["hasDirectStream"].as_bool().unwrap_or(false))
+            .map(|s| self::s(&s, "name"))
+    });
+    if let Some(srv_name) = playing_server.filter(|n| !n.is_empty()) {
+        text("activeServerLabel", &srv_name);
+    } else {
+        let source = current_episode()
+            .map(|ep| catalogue::provider(&ep).to_string())
+            .unwrap_or_default();
+        text("activeServerLabel", source_name(&source));
+    }
     let height = quality_height(&selected);
     let quality = if selected["type"] != "hls" && height > 0 {
         format!("{height}p")
@@ -1252,23 +1262,32 @@ pub fn open_sources() {
     if !rows(&episode, "directStreams").is_empty() {
         content.push_str(&format!("<button class=\"sheet-row\" data-player-action=\"direct\"><span>مشغّل {} المباشر</span><span class=\"sheet-pill\">{}</span></button>",source_name(current_source),if STATE.with(|c|c.borrow().embedded.is_none()){"الحالي"}else{"تشغيل"}));
     }
+    let active_id = current_episode()
+        .and_then(|e| {
+            rows(&e, "servers")
+                .iter()
+                .find(|s| s["hasDirectStream"].as_bool().unwrap_or(false))
+                .map(|s| self::s(s, "id"))
+        })
+        .unwrap_or_default();
+
     for (i, server) in rows(&episode, "servers").iter().enumerate() {
         let name = s(server, "name");
-        let is_direct = name.eq_ignore_ascii_case("ok");
-        if is_direct {
-            content.push_str(&format!(
-                "<button class=\"sheet-row\" data-player-action=\"embed\" data-index=\"{i}\"><span>سيرفر مباشر ({})</span><span class=\"sheet-pill direct\">{} مباشر</span></button>",
-                esc(&name),
-                icons::BOLT
-            ));
+        let id = s(server, "id");
+        let is_current = (!active_id.is_empty() && id == active_id)
+            || (active_id.is_empty() && i == 0);
+        let pill = if is_current && STATE.with(|c| c.borrow().embedded.is_none()) {
+            format!("<span class=\"sheet-pill direct active-source\">{} يعمل الآن</span>", icons::CHECK)
         } else {
-            content.push_str(&format!(
-                "<button class=\"sheet-row\" data-player-action=\"embed\" data-index=\"{i}\"><span>سيرفر {}</span><span class=\"sheet-pill\">خارجي</span></button>",
-                esc(&name)
-            ));
-        }
+            format!("<span class=\"sheet-pill direct\">{} تبديل مباشر</span>", icons::BOLT)
+        };
+        content.push_str(&format!(
+            "<button class=\"sheet-row{}\" data-player-action=\"embed\" data-index=\"{i}\"><span>سيرفر {}</span>{pill}</button>",
+            if is_current { " active-mirror" } else { "" },
+            esc(&name)
+        ));
     }
-    content.push_str("<p class=\"source-switch-note\">التبديل بين المصدرين المباشرين يحتفظ بموضعك وإعداداتك. السيرفر الخارجي يستخدم مشغّله الخاص وقد يبدأ من البداية.</p>");
+    content.push_str("<p class=\"source-switch-note\">جميع السيرفرات تعمل كبث مباشر وسريع داخل التطبيق مع حفظ موضع وزمن المشاهدة تلقائياً.</p>");
     app::open_sheet("المصادر والسيرفرات", &content);
 }
 fn begin_switch(title: &str) -> (u64, u64, Option<AbortController>) {
@@ -1578,14 +1597,11 @@ fn switch_mirror(index: usize) {
     let Some(server) = rows(&episode, "servers").get(index).cloned() else {
         return;
     };
-    if !s(&server, "name").eq_ignore_ascii_case("ok") || s(&server, "id").is_empty() {
-        app::open_sheet(
-            "سيرفر غير مباشر",
-            "<p class=\"empty-note\">هذا السيرفر خارجي ولا يوفر بثاً مباشراً داخل التطبيق. المشاهدة الحالية مستمرة بدون انقطاع.</p>",
-        );
+    if s(&server, "id").is_empty() {
         return;
     }
-    let (session, generation, controller) = begin_switch("تجهيز السيرفر البديل");
+    let server_name = s(&server, "name");
+    let (session, generation, controller) = begin_switch(&format!("تجهيز سيرفر {server_name}…"));
     spawn_local(async move {
         let signal = controller.as_ref().map(|c| c.signal());
         let result = api::call_with_signal(
@@ -1615,6 +1631,8 @@ fn switch_mirror(index: usize) {
                     p.rollback = restore;
                     p.refreshed = false;
                 });
+                text("activeServerLabel", &server_name);
+                pill(&format!("تم التبديل إلى سيرفر {server_name}"));
                 play_direct(None, settings, false);
             }
             Ok(_) | Err(_) => {

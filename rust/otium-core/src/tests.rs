@@ -258,3 +258,15 @@ fn first_usable_mirror_cancels_a_hanging_mirror_and_ignores_empty_results() {
     assert!(started.elapsed() < Duration::from_millis(500));
     assert!(slow_dropped.load(Ordering::SeqCst));
 }
+
+#[test]
+fn dean_edwards_packer_unpacks_hls_streams() {
+    let packed = r#"eval(function(p,a,c,k,e,d){while(c--)if(k[c])p=p.replace(new RegExp('\\b'+c.toString(a)+'\\b','g'),k[c]);return p}('0("1").2({3:[{4:"5://6.7/8.9"}]});',10,10,'jwplayer|vplayer|setup|sources|file|https|cdn.test|com|master|m3u8'.split('|')))"#;
+    let unpacked = unpack_dean_edwards(packed).expect("Should unpack successfully");
+    assert!(unpacked.contains("https://cdn.test.com/master.m3u8"));
+    assert!(unpacked.contains("jwplayer(\"vplayer\").setup"));
+
+    // Missing or corrupted packer returns None
+    assert!(unpack_dean_edwards("not packed code").is_none());
+    assert!(unpack_dean_edwards("eval(function(p,a,c,k,e,d){}(invalid))").is_none());
+}
