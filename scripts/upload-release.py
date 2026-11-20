@@ -38,14 +38,15 @@ RELEASE_BODY = """# ZOET v3.3.0 🎬
    - الحفاظ على واجهة المشغل الزجاجية وأدوات التحكم في المقدمة دائماً فوق الفيديو.
    - حظر النوافذ الإعلانية المنبثقة ومنع إعادة توجيه الروابط الخارجية.
 
-5. **🖥️ تحديث شامل لحزم سطح المكتب (Windows Native):**
-   - حزمة `ZOET.exe` المستقلة المحدثة بالكامل بمحرك الرسوميات السريع ودعم شاشات اللمس والماوس.
+5. **💻 أجهزة الكمبيوتر وسطح المكتب (Windows / Mac / Linux):**
+   - اعتماد منصة الويب الرسمية فائقة السرعة المعتمدة على محرك Rust WebAssembly: **[https://xrtm8.github.io/ZOET-Web/](https://xrtm8.github.io/ZOET-Web/)**.
+   - **التثبيت كتطبيق مستقل (PWA)**: افتح الرابط في متصفحك (Edge أو Chrome أو Brave) ثم اضغط على أيقونة **"تثبيت التطبيق" (Install App)** في شريط العناوين لتحصل على التطبيق فوراً على سطح مكتبك وقائمة ابدأ بدون الحاجة لتحميل ملفات exe أو مشاكل الحظر والتثبيت.
 
 ---
 
 ### 📦 الملفات المرفقة:
-- **`app-release.apk` / `otium-play.apk` / `zoet-3.3.0.apk`**: نسخة Android (`com.krmzi.app` · `versionCode 39`) موقّعة بالمفتاح المستقر ومحاذاة 16KB لجميع المعالجات.
-- **`ZOET.exe`**: نسخة Windows الأصلية المستقلة (Tauri v2).
+- **`app-release.apk` / `otium-play.apk`**: نسخة Android الرسمية (`com.krmzi.app` · `versionCode 39`) موقّعة بالمفتاح المستقر ومحاذاة 16KB لجميع المعالجات.
+- **نسخة الويب والحاسوب**: متاحة ومثبتة مباشرة عبر الرابط [https://xrtm8.github.io/ZOET-Web/](https://xrtm8.github.io/ZOET-Web/)
 
 ---
 
@@ -131,13 +132,23 @@ def main():
     files_to_upload = [
         ('app-release.apk', 'release-output/app-release.apk', 'application/vnd.android.package-archive'),
         ('otium-play.apk', 'release-output/otium-play.apk', 'application/vnd.android.package-archive'),
-        ('ZOET.exe', 'release-output/ZOET.exe', 'application/vnd.microsoft.portable-executable'),
     ]
 
     req = urllib.request.Request(f'https://api.github.com/repos/XRTM8/ZOET/releases/{release_info["id"]}', headers=headers)
     with urllib.request.urlopen(req) as resp:
         current_release = json.loads(resp.read().decode())
     existing_assets = {a['name']: a['id'] for a in current_release.get('assets', [])}
+
+    # Delete deprecated desktop executable if present
+    if 'ZOET.exe' in existing_assets:
+        print(f"Removing deprecated ZOET.exe asset (ID: {existing_assets['ZOET.exe']})...")
+        del_cmd = [
+            'curl.exe', '--ssl-no-revoke', '-s', '-X', 'DELETE',
+            '-H', f'Authorization: token {token}',
+            f'https://api.github.com/repos/XRTM8/ZOET/releases/assets/{existing_assets["ZOET.exe"]}'
+        ]
+        subprocess.run(del_cmd, check=True)
+        time.sleep(1)
 
     for asset_name, asset_path, mime_type in files_to_upload:
         if not os.path.exists(asset_path):
