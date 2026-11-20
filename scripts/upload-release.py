@@ -9,9 +9,9 @@ import time
 
 sys.stdout.reconfigure(encoding='utf-8')
 
-TAG_NAME = 'v3.3.0'
-RELEASE_NAME = 'ZOET v3.3.0 - التحديث الشامل: أوفر هول الشاشات والتلفزيون (Leanback TV)، والواجهة البريميوم، واستقرار السيرفرات'
-RELEASE_BODY = """# ZOET v3.3.0 🎬
+TAG_NAME = 'v3.4.0'
+RELEASE_NAME = 'ZOET v3.4.0 - التحديث الشامل: أوفر هول الشاشات والتلفزيون (Leanback TV)، والواجهة البريميوم، واستقرار السيرفرات'
+RELEASE_BODY = """# ZOET v3.4.0 🎬
 
 أوفرهول وتحديث شامل يعيد بناء تجربة شاشات وأجهزة التلفزيون (Android TV / Leanback)، بالإضافة للواجهة البريميوم والأنيميشنات التفاعلية، تنظيم بوسترات المسلسلات والأفلام بدقة عالية، وتثبيت بث السيرفرات المباشر.
 
@@ -61,13 +61,13 @@ RELEASE_BODY = """# ZOET v3.3.0 🎬
 ---
 
 ### 📦 الملفات المرفقة:
-- **`app-release.apk` / `otium-play.apk`**: نسخة Android الرسمية للهواتف والتلفزيون (`com.krmzi.app` · `versionCode 39`) موقّعة بالمفتاح المستقر ومحاذاة 16KB لجميع المعالجات.
+- **`app-release.apk` / `otium-play.apk`**: نسخة Android الرسمية للهواتف والتلفزيون (`com.krmzi.app` · `versionCode 40`) موقّعة بالمفتاح المستقر ومحاذاة 16KB لجميع المعالجات.
 - **نسخة الويب والحاسوب**: متاحة ومثبتة مباشرة عبر الرابط [https://xrtm8.github.io/ZOET-Web/](https://xrtm8.github.io/ZOET-Web/)
 
 ---
 
 ### 🛡️ معلومات التثبيت والتحقق:
-- **معرف الحزمة:** `com.krmzi.app` | **versionCode:** `39` | **SHA-256 للشهادة:** `2c6d74a5251577fcdfd8a9df651d52fb2641ff4ef1be6686c8266abed0a0cbf3`
+- **معرف الحزمة:** `com.krmzi.app` | **versionCode:** `40` | **SHA-256 للشهادة:** `2c6d74a5251577fcdfd8a9df651d52fb2641ff4ef1be6686c8266abed0a0cbf3`
 - **حالة التحقق:** اجتاز البناء محاذاة 16KB وتوقيع APK Signature Scheme v2 واختبارات سلامة الأصول المدمجة.
 """
 
