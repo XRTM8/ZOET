@@ -47,6 +47,7 @@ struct State {
     history_saved: f64,
     library_mode: String,
     cinemana_available: Option<bool>,
+    preferred_season: Option<String>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -68,6 +69,7 @@ impl Default for State {
             history_saved: 0.,
             library_mode: "hist".into(),
             cinemana_available: None,
+            preferred_season: None,
         }
     }
 }
@@ -1449,6 +1451,9 @@ pub fn open_series(url: String) {
 }
 fn render_series_detail(series: &Value) {
     let episodes = series["episodes"].as_array().cloned().unwrap_or_default();
+    let is_movie = episodes.is_empty()
+        || s(series, "mediaType") == "movie"
+        || s(series, "type") == "movie";
     let mut seasons = episodes
         .iter()
         .map(|ep| {
@@ -1463,12 +1468,22 @@ fn render_series_detail(series: &Value) {
         .into_iter()
         .collect::<Vec<_>>();
     seasons.sort_by_key(|s| s.parse::<u32>().unwrap_or(u32::MAX));
+    let preferred_s = STATE.with(|s| s.borrow_mut().preferred_season.take());
+    let active_season = if let Some(pref) = &preferred_s {
+        if seasons.contains(pref) {
+            pref.clone()
+        } else {
+            seasons.first().cloned().unwrap_or_else(|| "1".into())
+        }
+    } else {
+        seasons.first().cloned().unwrap_or_else(|| "1".into())
+    };
     let tabs = seasons
         .iter()
         .map(|season| {
             format!(
                 "<button class=\"season-tab{}\" data-action=\"season\" data-season=\"{}\">الموسم {}</button>",
-                if Some(season) == seasons.first() {
+                if season == &active_season {
                     " active"
                 } else {
                     ""
@@ -1498,6 +1513,11 @@ fn render_series_detail(series: &Value) {
     } else {
         dubbed_offer.map(|o| s(o, "url")).unwrap_or_default()
     };
+
+    if !has_both && !is_movie {
+        let target_ed = if is_dubbed { "original" } else { "dubbed" };
+        proactive_resolve_counterpart(series.clone(), target_ed);
+    }
 
     let edition_switcher = format!(
         "<div class=\"series-edition-tabs\">\
@@ -1630,7 +1650,7 @@ fn render_series_detail(series: &Value) {
             <div class=\"sheet-episode-grid episode-card-list media-grid\" id=\"seriesEpisodeList\" data-season=\"{}\"></div>",
             episodes.len(),
             icons::SEARCH,
-            esc(seasons.first().map(String::as_str).unwrap_or("1"))
+            esc(&active_season)
         )
     };
 
@@ -1693,53 +1713,65 @@ fn render_series_detail(series: &Value) {
         }
     }
 }
-fn switch_detail_edition(target_edition: String, title: String) {
-    let token = STATE.with(|state| {
-        let mut state = state.borrow_mut();
-        state.sheet_generation += 1;
-        state.sheet_generation
+fn apply_resolved_counterpart(token: u64, original_url: &str, found: Value, target_edition: &str) {
+    if STATE.with(|state| state.borrow().sheet_generation) != token {
+        return;
+    }
+    let found_url = if !s(&found, "seriesUrl").is_empty() {
+        s(&found, "seriesUrl")
+    } else {
+        s(&found, "url")
+    };
+    if found_url.is_empty() {
+        return;
+    }
+    STATE.with(|state| {
+        let mut st = state.borrow_mut();
+        if s(&st.context, "url") == original_url {
+            let mut offers = st.context["offers"].as_array().cloned().unwrap_or_default();
+            if !offers.iter().any(|o| s(o, "url") == found_url) {
+                offers.push(found.clone());
+                st.context["offers"] = json!(offers);
+                st.context["has_both_editions"] = json!(true);
+            }
+        }
     });
-    let label = if target_edition == "dubbed" { "المدبلجة" } else { "المترجمة" };
-    notify(&format!("جاري البحث عن النسخة {}…", label));
+    let selector = format!(".series-edition-tab[data-edition='{}']", target_edition);
+    if let Ok(Some(tab)) = document().query_selector(&selector) {
+        let _ = tab.set_attribute("data-url", &found_url);
+        tab.class_list().add_1("ready").ok();
+    }
+}
+
+fn proactive_resolve_counterpart(series: Value, target_edition: &'static str) {
+    let raw_url = s(&series, "url");
+    if raw_url.is_empty() {
+        return;
+    }
+    let token = STATE.with(|state| state.borrow().sheet_generation);
     spawn_local(async move {
-        let clean = catalogue::clean_series_title(&title);
-        let dummy = json!({"title": clean.clone(), "edition": target_edition, "type": "series"});
+        let identity = catalogue::build_series_identity(&series, target_edition);
         let known = known_series();
-        if let Some(found) = catalogue::find_counterpart_with_edition(&dummy, &known, Some(&target_edition)) {
-            let url = if !s(&found, "seriesUrl").is_empty() {
+        if let Some(found) = catalogue::find_counterpart_with_edition(&identity, &known, Some(target_edition)) {
+            let found_url = if !s(&found, "seriesUrl").is_empty() {
                 s(&found, "seriesUrl")
             } else {
                 s(&found, "url")
             };
-            if !url.is_empty() {
-                open_series(url);
+            if !found_url.is_empty() {
+                apply_resolved_counterpart(token, &raw_url, found, target_edition);
                 return;
             }
         }
-        let preferred = storage("otium_preferred_source").unwrap_or("cinemana".into());
-        let other = if preferred == "cinemana" { "krmzi" } else { "cinemana" };
+        let clean = catalogue::clean_series_title(&s(&identity, "title"));
         let mut queries = vec![clean.clone()];
         if target_edition == "dubbed" {
             queries.push(format!("{clean} مدبلج"));
-            queries.push(format!("مسلسل {clean} مدبلج"));
         } else {
             queries.push(format!("{clean} مترجم"));
-            queries.push(format!("مسلسل {clean}"));
         }
-        let current_series = STATE.with(|state| state.borrow().context.clone());
-        if let Some(aliases) = current_series["aliases"].as_array() {
-            for a in aliases.iter().filter_map(Value::as_str) {
-                let clean_a = catalogue::clean_series_title(a);
-                if !clean_a.is_empty() && !queries.contains(&clean_a) {
-                    queries.push(clean_a.clone());
-                    if target_edition == "dubbed" {
-                        queries.push(format!("{clean_a} مدبلج"));
-                    }
-                }
-            }
-        }
-        for key in ["en_title", "other_title"] {
-            let val = s(&current_series, key);
+        for key in ["ar_title", "en_title", "other_title"] {
+            let val = s(&identity, key);
             if !val.is_empty() {
                 let clean_val = catalogue::clean_series_title(&val);
                 if !clean_val.is_empty() && !queries.contains(&clean_val) {
@@ -1750,39 +1782,140 @@ fn switch_detail_edition(target_edition: String, title: String) {
                 }
             }
         }
-        if let Some(slug) = catalogue::slug_from_url(&s(&current_series, "url")) {
-            let clean_slug = catalogue::clean_series_title(&slug);
-            if !clean_slug.is_empty() && !queries.contains(&clean_slug) {
-                queries.push(clean_slug.clone());
-                if target_edition == "dubbed" {
-                    queries.push(format!("{clean_slug} مدبلج"));
+        let preferred = storage("otium_preferred_source").unwrap_or("cinemana".into());
+        let other = if preferred == "cinemana" { "krmzi" } else { "cinemana" };
+        let mut futures = Vec::new();
+        for src in [&preferred, other] {
+            for q in &queries {
+                let src_str = src.to_string();
+                let q_str = q.clone();
+                futures.push(async move {
+                    api::call("/api/search", &[("q", q_str)], Some(&src_str)).await
+                });
+            }
+        }
+        let responses = futures_util::future::join_all(futures).await;
+        if STATE.with(|state| state.borrow().sheet_generation) != token {
+            return;
+        }
+        let mut all_rows = Vec::new();
+        for resp in responses {
+            if let Ok(v) = resp {
+                if let Some(arr) = v["results"].as_array() {
+                    all_rows.extend(arr.clone());
                 }
             }
         }
-        for src in [&preferred, other] {
-            for q in &queries {
-                if let Ok(results) = api::call("/api/search", &[("q", q.clone())], Some(src)).await {
-                    if STATE.with(|state| state.borrow().sheet_generation) != token {
-                        return;
-                    }
-                    let mut rows = results["results"].as_array().cloned().unwrap_or_default();
-                    let parsed = search::parse_query(q);
-                    search::sort_by_relevance(&mut rows, &parsed, &[]);
-                    if let Some(found) = catalogue::find_counterpart_with_edition(&dummy, &rows, Some(&target_edition)) {
-                        let url = if !s(&found, "seriesUrl").is_empty() {
-                            s(&found, "seriesUrl")
-                        } else {
-                            s(&found, "url")
-                        };
-                        if !url.is_empty() {
-                            open_series(url);
-                            return;
-                        }
+        if let Some(found) = catalogue::find_counterpart_with_edition(&identity, &all_rows, Some(target_edition)) {
+            apply_resolved_counterpart(token, &raw_url, found, target_edition);
+        }
+    });
+}
+
+fn switch_detail_edition(target_edition: String, _title: String) {
+    let token = STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        state.sheet_generation += 1;
+        state.sheet_generation
+    });
+    if let Some(list) = document().get_element_by_id("seriesEpisodeList") {
+        if let Some(s_num) = list.get_attribute("data-season") {
+            STATE.with(|state| state.borrow_mut().preferred_season = Some(s_num));
+        }
+    }
+    let label = if target_edition == "dubbed" { "المدبلجة" } else { "المترجمة" };
+    notify(&format!("جاري البحث عن النسخة {}…", label));
+    let selector = format!(".series-edition-tab[data-edition='{}']", target_edition);
+    if let Ok(Some(tab)) = document().query_selector(&selector) {
+        tab.class_list().add_1("loading").ok();
+    }
+    spawn_local(async move {
+        let current_series = STATE.with(|state| state.borrow().context.clone());
+        let identity = catalogue::build_series_identity(&current_series, &target_edition);
+        let known = known_series();
+        if let Some(found) = catalogue::find_counterpart_with_edition(&identity, &known, Some(&target_edition)) {
+            let url = if !s(&found, "seriesUrl").is_empty() {
+                s(&found, "seriesUrl")
+            } else {
+                s(&found, "url")
+            };
+            if !url.is_empty() {
+                open_series(url);
+                return;
+            }
+        }
+        let clean = catalogue::clean_series_title(&s(&identity, "title"));
+        let mut queries = vec![clean.clone()];
+        if target_edition == "dubbed" {
+            queries.push(format!("{clean} مدبلج"));
+            queries.push(format!("مسلسل {clean} مدبلج"));
+        } else {
+            queries.push(format!("{clean} مترجم"));
+            queries.push(format!("مسلسل {clean}"));
+        }
+        for key in ["ar_title", "en_title", "other_title"] {
+            let val = s(&identity, key);
+            if !val.is_empty() {
+                let clean_val = catalogue::clean_series_title(&val);
+                if !clean_val.is_empty() && !queries.contains(&clean_val) {
+                    queries.push(clean_val.clone());
+                    if target_edition == "dubbed" {
+                        queries.push(format!("{clean_val} مدبلج"));
                     }
                 }
+            }
+        }
+        if let Some(aliases) = identity["aliases"].as_array() {
+            for a in aliases.iter().filter_map(Value::as_str) {
+                let clean_a = catalogue::clean_series_title(a);
+                if !clean_a.is_empty() && !queries.contains(&clean_a) {
+                    queries.push(clean_a.clone());
+                    if target_edition == "dubbed" {
+                        queries.push(format!("{clean_a} مدبلج"));
+                    }
+                }
+            }
+        }
+        let preferred = storage("otium_preferred_source").unwrap_or("cinemana".into());
+        let other = if preferred == "cinemana" { "krmzi" } else { "cinemana" };
+        let mut futures = Vec::new();
+        for src in [&preferred, other] {
+            for q in &queries {
+                let src_str = src.to_string();
+                let q_str = q.clone();
+                futures.push(async move {
+                    api::call("/api/search", &[("q", q_str)], Some(&src_str)).await
+                });
+            }
+        }
+        let responses = futures_util::future::join_all(futures).await;
+        if STATE.with(|state| state.borrow().sheet_generation) != token {
+            return;
+        }
+        let mut all_rows = Vec::new();
+        for resp in responses {
+            if let Ok(v) = resp {
+                if let Some(arr) = v["results"].as_array() {
+                    all_rows.extend(arr.clone());
+                }
+            }
+        }
+        if let Some(found) = catalogue::find_counterpart_with_edition(&identity, &all_rows, Some(&target_edition)) {
+            let url = if !s(&found, "seriesUrl").is_empty() {
+                s(&found, "seriesUrl")
+            } else {
+                s(&found, "url")
+            };
+            if !url.is_empty() {
+                open_series(url);
+                return;
             }
         }
         if STATE.with(|state| state.borrow().sheet_generation) == token {
+            let selector = format!(".series-edition-tab[data-edition='{}']", target_edition);
+            if let Ok(Some(tab)) = document().query_selector(&selector) {
+                tab.class_list().remove_1("loading").ok();
+            }
             notify(&format!("النسخة {} غير متوفرة لهذا العمل حالياً", label));
         }
     });
@@ -1924,6 +2057,11 @@ fn click(event: Event) {
             let target_url = button.get_attribute("data-url").unwrap_or_default();
             let target_edition = button.get_attribute("data-edition").unwrap_or_default();
             let title = button.get_attribute("data-title").unwrap_or_default();
+            if let Some(list) = document().get_element_by_id("seriesEpisodeList") {
+                if let Some(s_num) = list.get_attribute("data-season") {
+                    STATE.with(|state| state.borrow_mut().preferred_season = Some(s_num));
+                }
+            }
             if !target_url.is_empty() {
                 open_series(target_url);
             } else {

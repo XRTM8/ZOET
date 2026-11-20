@@ -390,6 +390,18 @@ fn title_ui(episode: &Value) {
             "false"
         },
     );
+    let is_dubbed = catalogue::edition(episode) == "dubbed";
+    if is_dubbed {
+        text("playerEditionIcon", "💬");
+        text("playerEditionLabel", "المترجم");
+        let _ = el("playerEditionBtn").set_attribute("data-edition", "original");
+        let _ = el("playerEditionBtn").set_attribute("title", "التبديل إلى النسخة المترجمة");
+    } else {
+        text("playerEditionIcon", "🎙️");
+        text("playerEditionLabel", "المدبلج");
+        let _ = el("playerEditionBtn").set_attribute("data-edition", "dubbed");
+        let _ = el("playerEditionBtn").set_attribute("title", "التبديل إلى النسخة المدبلجة");
+    }
 }
 fn subtitles(episode: &Value) {
     let v = video();
@@ -1055,7 +1067,7 @@ fn load_drawer(url: String, session: u64) {
                         ep["artwork"] = Value::String(artwork.clone());
                     }
                 }
-                p.series = series;
+                p.series = series.clone();
                 p.episodes = episodes;
                 p.season = p
                     .episode
@@ -1067,6 +1079,16 @@ fn load_drawer(url: String, session: u64) {
             });
             if needs_art {
                 backdrop(&artwork);
+            }
+            let is_dubbed = STATE.with(|c| {
+                c.borrow().episode.as_ref().map(catalogue::edition).unwrap_or("original") == "dubbed"
+            });
+            let target_ed = if is_dubbed { "original" } else { "dubbed" };
+            let has_target_offer = series["offers"].as_array().map_or(false, |offers| {
+                offers.iter().any(|o| catalogue::edition(o) == target_ed)
+            });
+            if !has_target_offer {
+                proactive_resolve_player_counterpart(series.clone(), target_ed, session);
             }
             show("drawerEpisodeTools", true);
             if let Ok(input) = el("drawerEpisodeSearch").dyn_into::<HtmlInputElement>() {
@@ -1384,28 +1406,104 @@ fn discover(source: String) {
         );
     });
 }
+fn apply_player_resolved_counterpart(session: u64, found: Value) {
+    if STATE.with(|c| c.borrow().session) != session {
+        return;
+    }
+    let found_url = if !s(&found, "seriesUrl").is_empty() {
+        s(&found, "seriesUrl")
+    } else {
+        s(&found, "url")
+    };
+    if found_url.is_empty() {
+        return;
+    }
+    STATE.with(|c| {
+        let mut p = c.borrow_mut();
+        let mut offers = p.series["offers"].as_array().cloned().unwrap_or_default();
+        if !offers.iter().any(|o| s(o, "url") == found_url) {
+            offers.push(found.clone());
+            p.series["offers"] = json!(offers);
+            p.series["has_both_editions"] = json!(true);
+        }
+    });
+    let _ = el("playerEditionBtn").set_attribute("data-url", &found_url);
+    el("playerEditionBtn").class_list().add_1("ready").ok();
+}
+
+fn proactive_resolve_player_counterpart(series: Value, target_edition: &'static str, session: u64) {
+    let raw_url = s(&series, "url");
+    if raw_url.is_empty() {
+        return;
+    }
+    spawn_local(async move {
+        let identity = catalogue::build_series_identity(&series, target_edition);
+        let known = app::known_series();
+        if let Some(found) = catalogue::find_counterpart_with_edition(&identity, &known, Some(target_edition)) {
+            let found_url = if !s(&found, "seriesUrl").is_empty() {
+                s(&found, "seriesUrl")
+            } else {
+                s(&found, "url")
+            };
+            if !found_url.is_empty() {
+                apply_player_resolved_counterpart(session, found);
+                return;
+            }
+        }
+        let clean = catalogue::clean_series_title(&s(&identity, "title"));
+        let mut queries = vec![clean.clone()];
+        if target_edition == "dubbed" {
+            queries.push(format!("{clean} مدبلج"));
+        } else {
+            queries.push(format!("{clean} مترجم"));
+        }
+        for key in ["ar_title", "en_title", "other_title"] {
+            let val = s(&identity, key);
+            if !val.is_empty() {
+                let clean_val = catalogue::clean_series_title(&val);
+                if !clean_val.is_empty() && !queries.contains(&clean_val) {
+                    queries.push(clean_val.clone());
+                    if target_edition == "dubbed" {
+                        queries.push(format!("{clean_val} مدبلج"));
+                    }
+                }
+            }
+        }
+        let preferred = storage("otium_preferred_source").unwrap_or("cinemana".into());
+        let other = if preferred == "cinemana" { "krmzi" } else { "cinemana" };
+        let mut futures = Vec::new();
+        for src in [&preferred, other] {
+            for q in &queries {
+                let src_str = src.to_string();
+                let q_str = q.clone();
+                futures.push(async move {
+                    api::call("/api/search", &[("q", q_str)], Some(&src_str)).await
+                });
+            }
+        }
+        let responses = futures_util::future::join_all(futures).await;
+        if STATE.with(|c| c.borrow().session) != session {
+            return;
+        }
+        let mut all_rows = Vec::new();
+        for resp in responses {
+            if let Ok(v) = resp {
+                if let Some(arr) = v["results"].as_array() {
+                    all_rows.extend(arr.clone());
+                }
+            }
+        }
+        if let Some(found) = catalogue::find_counterpart_with_edition(&identity, &all_rows, Some(target_edition)) {
+            apply_player_resolved_counterpart(session, found);
+        }
+    });
+}
+
 fn switch_edition(target_edition: String, direct_url: Option<String>) {
     let Some(episode) = episode_identity() else {
         return;
     };
     let series = STATE.with(|c| c.borrow().series.clone());
-    let title = if !s(&episode, "seriesTitle").is_empty() {
-        s(&episode, "seriesTitle")
-    } else if !s(&series, "title").is_empty() {
-        s(&series, "title")
-    } else {
-        s(&episode, "title")
-    };
-    let clean = catalogue::clean_series_title(&title);
-    let identity = json!({
-        "title": clean.clone(),
-        "aliases": if episode["aliases"].is_array() { &episode["aliases"] } else { &series["aliases"] },
-        "year": series["year"],
-        "type": "series",
-        "edition": &target_edition
-    });
-    let current_source = catalogue::provider(&episode).to_string();
-    let other_source = if current_source == "cinemana" { "krmzi".to_string() } else { "cinemana".to_string() };
     let target_label = if target_edition == "dubbed" { "المدبلجة" } else { "المترجمة" };
 
     let (session, generation, controller) = begin_switch(&format!("الانتقال إلى النسخة {target_label}"));
@@ -1429,6 +1527,7 @@ fn switch_edition(target_edition: String, direct_url: Option<String>) {
         }
 
         // 1. Look in known_series for counterpart with target_edition
+        let identity = catalogue::build_series_identity(&series, &target_edition);
         let known = app::known_series();
         if let Some(candidate) = catalogue::find_counterpart_with_edition(&identity, &known, Some(&target_edition)) {
             let url = if !s(&candidate, "seriesUrl").is_empty() {
@@ -1436,68 +1535,88 @@ fn switch_edition(target_edition: String, direct_url: Option<String>) {
             } else {
                 s(&candidate, "url")
             };
-            switch_provider(url);
-            return;
+            if !url.is_empty() {
+                switch_provider(url);
+                return;
+            }
         }
 
-        // 2. Search on current source first, then other source
+        // 2. Search concurrently on Cinemana and Krmzi
+        let clean = catalogue::clean_series_title(&s(&identity, "title"));
         let mut queries = vec![clean.clone()];
         if target_edition == "dubbed" {
             queries.push(format!("{clean} مدبلج"));
+            queries.push(format!("مسلسل {clean} مدبلج"));
         } else {
             queries.push(format!("{clean} مترجم"));
+            queries.push(format!("مسلسل {clean}"));
+        }
+        for key in ["ar_title", "en_title", "other_title"] {
+            let val = s(&identity, key);
+            if !val.is_empty() {
+                let clean_val = catalogue::clean_series_title(&val);
+                if !clean_val.is_empty() && !queries.contains(&clean_val) {
+                    queries.push(clean_val.clone());
+                    if target_edition == "dubbed" {
+                        queries.push(format!("{clean_val} مدبلج"));
+                    }
+                }
+            }
         }
         if let Some(aliases) = identity["aliases"].as_array() {
             for a in aliases.iter().filter_map(Value::as_str) {
                 let clean_a = catalogue::clean_series_title(a);
                 if !clean_a.is_empty() && !queries.contains(&clean_a) {
-                    queries.push(clean_a);
+                    queries.push(clean_a.clone());
+                    if target_edition == "dubbed" {
+                        queries.push(format!("{clean_a} مدبلج"));
+                    }
                 }
             }
         }
-        for key in ["en_title", "other_title"] {
-            let val = s(&series, key);
-            if !val.is_empty() {
-                let clean_val = catalogue::clean_series_title(&val);
-                if !clean_val.is_empty() && !queries.contains(&clean_val) {
-                    queries.push(clean_val);
-                }
-            }
-        }
-        if let Some(slug) = catalogue::slug_from_url(&s(&series, "url")) {
-            let clean_slug = catalogue::clean_series_title(&slug);
-            if !clean_slug.is_empty() && !queries.contains(&clean_slug) {
-                queries.push(clean_slug);
-            }
-        }
+        let current_source = catalogue::provider(&episode).to_string();
+        let other_source = if current_source == "cinemana" { "krmzi".to_string() } else { "cinemana".to_string() };
+        let mut futures = Vec::new();
         for src in [&current_source, &other_source] {
             for q in &queries {
-                let result = api::call_with_signal(
-                    "/api/search",
-                    &[("q", q.clone())],
-                    Some(src),
-                    signal.as_ref(),
-                )
-                .await;
-                if !switch_current(session, generation, &controller) {
-                    return;
-                }
-                if let Some(candidate) = result.ok().and_then(|v| {
-                    catalogue::find_counterpart_with_edition(&identity, &rows(&v, "results"), Some(&target_edition))
-                }) {
-                    let url = if !s(&candidate, "seriesUrl").is_empty() {
-                        s(&candidate, "seriesUrl")
-                    } else {
-                        s(&candidate, "url")
-                    };
-                    switch_provider(url);
-                    return;
-                }
+                let src_str = src.clone();
+                let q_str = q.clone();
+                let sig = signal.clone();
+                futures.push(async move {
+                    api::call_with_signal(
+                        "/api/search",
+                        &[("q", q_str)],
+                        Some(&src_str),
+                        sig.as_ref(),
+                    )
+                    .await
+                });
+            }
+        }
+        let responses = futures_util::future::join_all(futures).await;
+        if !switch_current(session, generation, &controller) {
+            return;
+        }
+        let mut all_rows = Vec::new();
+        for resp in responses {
+            if let Ok(v) = resp {
+                all_rows.extend(rows(&v, "results"));
+            }
+        }
+        if let Some(candidate) = catalogue::find_counterpart_with_edition(&identity, &all_rows, Some(&target_edition)) {
+            let url = if !s(&candidate, "seriesUrl").is_empty() {
+                s(&candidate, "seriesUrl")
+            } else {
+                s(&candidate, "url")
+            };
+            if !url.is_empty() {
+                switch_provider(url);
+                return;
             }
         }
         app::open_sheet(
             "النسخة غير متاحة",
-            &format!("<p class=\"empty-note\">لم نجد النسخة {target_label} لهذا المسلسل في السيرفرات الحالية. المشاهدة الحالية مستمرة.</p>"),
+            &format!("<p class=\"empty-note\">لم نجد النسخة {target_label} لهذا العمل في السيرفرات الحالية. المشاهدة الحالية مستمرة.</p>"),
         );
     });
 }
@@ -1505,9 +1624,59 @@ fn switch_provider(url: String) {
     let Some(episode) = episode_identity() else {
         return;
     };
+    let is_movie = s(&episode, "mediaType") == "movie"
+        || s(&episode, "type") == "movie"
+        || url.starts_with("cinemana:") && s(&episode, "seriesUrl").is_empty();
     let (session, generation, controller) = begin_switch("تجهيز المصدر البديل");
     spawn_local(async move {
         let signal = controller.as_ref().map(|c| c.signal());
+        if is_movie {
+            let result = api::call_with_signal(
+                "/api/episode/detail",
+                &[("url", url.clone())],
+                None,
+                signal.as_ref(),
+            )
+            .await;
+            if !switch_current(session, generation, &controller) {
+                return;
+            }
+            let Ok(mut candidate) = result else {
+                app::open_sheet(
+                    "المصدر غير متاح",
+                    "<p class=\"empty-note\">تعذر تجهيز رابط الفيلم. المشاهدة الحالية مستمرة.</p>",
+                );
+                return;
+            };
+            if rows(&candidate, "directStreams").is_empty() {
+                app::open_sheet("الرابط غير متاح","<p class=\"empty-note\">المصدر الآخر لا يوفر رابطاً مباشراً لهذا الفيلم. المشاهدة الحالية مستمرة.</p>");
+                return;
+            }
+            let settings = snapshot();
+            let restore = restore_point();
+            save_history(true);
+            app::close_sheet();
+            candidate["artwork"] = Value::String(s(&episode, "artwork"));
+            let candidate_clone = candidate.clone();
+            let _ = STATE.with(|c| {
+                let mut p = c.borrow_mut();
+                p.session += 1;
+                p.attempt += 1;
+                p.active_url = s(&candidate, "url");
+                p.episode = Some(candidate);
+                p.rollback = restore;
+                p.refreshed = false;
+                p.next_deadline = None;
+                p.next_cancelled = false;
+                p.session
+            });
+            title_ui(&candidate_clone);
+            subtitles(&candidate_clone);
+            backdrop(&s(&candidate_clone, "artwork"));
+            play_direct(None, settings, false);
+            return;
+        }
+
         let result = api::call_with_signal(
             "/api/series/detail",
             &[("url", url.clone())],
@@ -3186,12 +3355,12 @@ pub(crate) fn remote_arrow(key: &str) {
                 return;
             }
         }
-        "openEpisodesSheetBtn" | "openServersSheetBtn" | "openQualitySheetBtn" | "toggleSubtitlesBtn" => {
+        "openEpisodesSheetBtn" | "openServersSheetBtn" | "openQualitySheetBtn" | "playerEditionBtn" | "toggleSubtitlesBtn" => {
             if key == "arrowup" {
                 focus("centerPlay");
                 return;
             }
-            let bottom_btns = ["openEpisodesSheetBtn", "openServersSheetBtn", "openQualitySheetBtn", "toggleSubtitlesBtn"];
+            let bottom_btns = ["openServersSheetBtn", "openQualitySheetBtn", "openEpisodesSheetBtn", "playerEditionBtn", "toggleSubtitlesBtn"];
             if let Some(pos) = bottom_btns.iter().position(|&id| id == curr_id) {
                 if key == "arrowleft" && pos + 1 < bottom_btns.len() {
                     focus(bottom_btns[pos + 1]);
@@ -3460,6 +3629,14 @@ pub fn init() {
     on("openServersSheetBtn", "click", |_| open_sources());
     on("openQualitySheetBtn", "click", |_| open_quality());
     on("openEpisodesSheetBtn", "click", |_| all_episodes());
+    on("playerEditionBtn", "click", |_| {
+        let current_ed = STATE.with(|c| {
+            c.borrow().episode.as_ref().map(catalogue::edition).unwrap_or("original")
+        });
+        let target_ed = if current_ed == "dubbed" { "original" } else { "dubbed" };
+        let direct_url = el("playerEditionBtn").get_attribute("data-url").filter(|s| !s.is_empty());
+        switch_edition(target_ed.to_string(), direct_url);
+    });
     on("toggleSubtitlesBtn", "click", |_| toggle_subtitles());
     on("toggleTheaterBtn", "click", |_| toggle_theater());
     on("toggleFullscreenBtn", "click", |_| fullscreen());

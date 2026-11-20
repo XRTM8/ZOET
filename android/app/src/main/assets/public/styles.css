@@ -731,7 +731,6 @@ video::-webkit-media-controls-panel {
 .action-capsule:active {
   transform: scale(0.95);
 }
-}
 .action-capsule i, .action-capsule svg {
   color: #94a3b8;
   font-size: 13px;
@@ -749,6 +748,28 @@ video::-webkit-media-controls-panel {
 }
 .action-capsule:hover i, .action-capsule:hover svg {
   color: #ffffff;
+}
+.edition-capsule-button {
+  background: rgba(229, 9, 20, 0.16);
+  border: 1px solid rgba(229, 9, 20, 0.38);
+  color: #ffffff;
+  gap: 6px;
+  inline-size: auto;
+  max-width: 140px;
+}
+.edition-capsule-button:hover {
+  background: rgba(229, 9, 20, 0.3);
+  border-color: rgba(229, 9, 20, 0.75);
+}
+.edition-capsule-button .capsule-icon {
+  font-size: 14px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+}
+.edition-capsule-button.loading {
+  opacity: 0.6;
+  pointer-events: none;
 }
 .bar-circle-dock {
   background: rgba(10, 12, 16, 0.75);
@@ -1720,6 +1741,14 @@ html[data-display='tv'] .edition-badge {
   background: rgba(255, 255, 255, 0.15);
   border-color: rgba(255, 255, 255, 0.25);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+.series-edition-tab.ready:not(.active) {
+  border-color: rgba(229, 9, 20, 0.4);
+  color: #f1f5f9;
+}
+.series-edition-tab.loading {
+  opacity: 0.6;
+  pointer-events: none;
 }
 .series-edition-tab:focus {
   outline: 2px solid #ffffff;
@@ -4161,6 +4190,20 @@ html[data-display='tv'] .action-capsule {
 }
 html[data-display='tv'] :is(#openServersSheetBtn, #openQualitySheetBtn) {
   inline-size: 140px;
+}
+html[data-display='tv'] #playerEditionBtn {
+  min-height: 48px !important;
+  height: 48px !important;
+  font-size: clamp(14px, 1.15vw, 18px) !important;
+  padding: 8px 18px !important;
+  background: rgba(229, 9, 20, 0.25) !important;
+  border: 1px solid rgba(229, 9, 20, 0.5) !important;
+  max-width: 170px;
+}
+html[data-display='tv'] #playerEditionBtn:focus {
+  outline: 3px solid #ff3b30 !important;
+  background: rgba(229, 9, 20, 0.55) !important;
+  transform: scale(1.05);
 }
 html[data-display='tv'] .action-circle-icon {
   width: 46px !important;

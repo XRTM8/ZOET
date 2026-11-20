@@ -56,9 +56,14 @@ pub fn normalized(value: &str) -> String {
     }
     while let Some(last) = words.last() {
         if [
-            "قرمزي", "كامل", "بالعربية", "للعربية", "مترجم", "مترجمة", "مدبلج",
-            "مدبلجة", "اونلاين", "اون", "لاين", "dubbed", "dub", "subbed", "sub",
-            "turkish", "turkce", "bolum", "dizi", "season", "sezon",
+            "قرمزي", "كامل", "كاملة", "بالعربية", "للعربية", "عربي", "مترجم", "مترجمة", "ترجمة", "الترجمة",
+            "مدبلج", "مدبلجة", "دبلجة", "دبلجه", "الدبلجة", "اونلاين", "اون", "لاين",
+            "dubbed", "dub", "subbed", "sub", "turkish", "turkce", "bolum", "dizi",
+            "season", "sezon", "part", "موسم", "الموسم", "جزء", "الجزء",
+            "الاول", "الأول", "الثاني", "الثالث", "الرابع", "الخامس", "السادس", "السابع", "الثامن", "التاسع", "العاشر",
+            "اول", "أول", "ثاني", "ثالث", "رابع", "خامس",
+            "1", "2", "3", "4", "5", "6", "7", "8", "9", "0",
+            "s1", "s2", "s3", "s4", "s5", "s01", "s02", "s03",
         ]
         .contains(last)
         {
@@ -128,6 +133,11 @@ pub fn edition(value: &Value) -> &'static str {
             .flat_map(char::to_lowercase)
             .collect::<String>();
         lower.contains("مدبلج")
+            || lower.contains("مدبلجه")
+            || lower.contains("دبلجة")
+            || lower.contains("دبلجه")
+            || lower.contains("الدبلجة")
+            || lower.contains("بالدبلجة")
             || lower
                 .split(|char: char| !char.is_alphanumeric())
                 .any(|word| word == "dubbed" || word == "dub")
@@ -188,53 +198,145 @@ pub fn episode_number(value: &Value) -> String {
         .unwrap_or_default()
 }
 
-pub fn season(value: &Value) -> String {
-    let value = number(&field(value, "season"));
-    if value.is_empty() {
-        "1".to_owned()
-    } else {
-        value
+pub fn season_from_text(text: &str) -> Option<String> {
+    let lower = text.to_lowercase();
+    for (phrase, num) in [
+        ("الموسم العاشر", "10"), ("الموسم التاسع", "9"), ("الموسم الثامن", "8"),
+        ("الموسم السابع", "7"), ("الموسم السادس", "6"), ("الموسم الخامس", "5"),
+        ("الموسم الرابع", "4"), ("الموسم الثالث", "3"), ("الموسم الثاني", "2"),
+        ("الموسم الاول", "1"), ("الموسم الأول", "1"),
+        ("الجزء العاشر", "10"), ("الجزء التاسع", "9"), ("الجزء الثامن", "8"),
+        ("الجزء السابع", "7"), ("الجزء السادس", "6"), ("الجزء الخامس", "5"),
+        ("الجزء الرابع", "4"), ("الجزء الثالث", "3"), ("الجزء الثاني", "2"),
+        ("الجزء الاول", "1"), ("الجزء الأول", "1"),
+    ] {
+        if lower.contains(phrase) {
+            return Some(num.to_string());
+        }
     }
+    for marker in ["الموسم", "موسم", "الجزء", "جزء", "season", "s"] {
+        if let Some(pos) = lower.find(marker) {
+            let rest = lower[pos + marker.len()..].trim_start();
+            let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+            if !digits.is_empty() {
+                if let Ok(n) = digits.parse::<u32>() {
+                    return Some(n.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+pub fn season(value: &Value) -> String {
+    let explicit = number(&field(value, "season"));
+    if !explicit.is_empty() && explicit != "0" {
+        return explicit;
+    }
+    for key in ["title", "seriesTitle", "ar_title", "en_title"] {
+        let val = field(value, key);
+        if let Some(s) = season_from_text(&val) {
+            return s;
+        }
+    }
+    "1".to_owned()
 }
 
 pub fn clean_title(title: &str) -> String {
     let mut clean = title.trim();
-    for prefix in ["مسلسل ", "مسلسلات ", "فيلم ", "افلام "] {
+    for prefix in [
+        "مسلسل ", "مسلسلات ", "سلسلة ", "فيلم ", "افلام ", "برنامج ",
+        "dizi ", "film ", "series ", "movie ",
+    ] {
         if clean.starts_with(prefix) {
             clean = &clean[prefix.len()..];
             break;
         }
     }
-    for suffix in [
-        " - قرمزي",
-        " - مدبلج بالعربية",
-        " - مدبلجة بالعربية",
-        " - مدبلج للعربية",
-        " - مدبلج",
-        " - مدبلجة",
-        " - مترجم للعربية",
-        " - مترجمة للعربية",
-        " - مترجم",
-        " - مترجمة",
-        " مدبلج بالعربية",
-        " مدبلجة بالعربية",
-        " مدبلج للعربية",
-        " مدبلجة للعربية",
-        " مدبلج",
-        " مدبلجة",
-        " مترجم بالعربية",
-        " مترجمة بالعربية",
-        " مترجم للعربية",
-        " مترجمة للعربية",
-        " مترجم",
-        " مترجمة",
-        " (مدبلج)",
-        " [مدبلج]",
-        " (مترجم)",
-        " [مترجم]",
-    ] {
-        if let Some((base, _)) = clean.split_once(suffix) {
-            clean = base;
+    clean = clean.trim();
+    loop {
+        let prev = clean;
+        if let Some(open) = clean.rfind(['(', '[']) {
+            if let Some(close) = clean[open..].find([')', ']']) {
+                let inside = &clean[open + 1..open + close];
+                let inside_lower = inside.to_lowercase();
+                if inside_lower.contains("مدبلج")
+                    || inside_lower.contains("دبلج")
+                    || inside_lower.contains("مترجم")
+                    || inside_lower.contains("ترجم")
+                    || inside_lower.contains("dub")
+                    || inside_lower.contains("sub")
+                    || (inside.len() == 4 && inside.chars().all(|c| c.is_ascii_digit()))
+                {
+                    clean = clean[..open].trim();
+                }
+            }
+        }
+        for suffix in [
+            " - قرمزي",
+            " - مدبلج بالعربية",
+            " - مدبلجة بالعربية",
+            " - مدبلج للعربية",
+            " - مدبلجة للعربية",
+            " - دبلجة عربية",
+            " - بالدبلجة العربية",
+            " - مدبلج",
+            " - مدبلجة",
+            " - مترجم للعربية",
+            " - مترجمة للعربية",
+            " - مترجم بالعربية",
+            " - مترجمة بالعربية",
+            " - مترجم",
+            " - مترجمة",
+            " مدبلج بالعربية",
+            " مدبلجة بالعربية",
+            " مدبلج للعربية",
+            " مدبلجة للعربية",
+            " دبلجة عربية",
+            " بالدبلجة العربية",
+            " مدبلج",
+            " مدبلجة",
+            " مترجم بالعربية",
+            " مترجمة بالعربية",
+            " مترجم للعربية",
+            " مترجمة للعربية",
+            " مترجم",
+            " مترجمة",
+            " (مدبلج)",
+            " [مدبلج]",
+            " (مترجم)",
+            " [مترجم]",
+            " (Dubbed)",
+            " [Dubbed]",
+            " (Subbed)",
+            " [Subbed]",
+            " (dubbed)",
+            " [dubbed]",
+            " (subbed)",
+            " [subbed]",
+            " - Dubbed",
+            " - Subbed",
+            " - dubbed",
+            " - subbed",
+            " Dubbed",
+            " Subbed",
+            " dubbed",
+            " subbed",
+        ] {
+            if clean.ends_with(suffix) {
+                clean = &clean[..clean.len() - suffix.len()];
+                clean = clean.trim();
+                break;
+            }
+        }
+        for sep in [" -", " :", " |", " —", " /", "-", ":", "|", "/"] {
+            if clean.ends_with(sep) {
+                clean = &clean[..clean.len() - sep.len()];
+                clean = clean.trim();
+                break;
+            }
+        }
+        if clean == prev {
             break;
         }
     }
@@ -242,12 +344,88 @@ pub fn clean_title(title: &str) -> String {
 }
 
 pub fn clean_series_title(title: &str) -> String {
-    let base = clean_title(title);
-    if let Some((clean, _)) = base.split_once("الحلقة") {
-        clean.trim().to_owned()
-    } else {
-        base
+    let mut clean = title.trim();
+    for marker in ["الحلقة", "حلقة", "bolum", "ep.", "episode"] {
+        if let Some((before, _)) = clean.split_once(marker) {
+            clean = before.trim();
+            break;
+        }
     }
+    let mut clean_str = clean_title(clean);
+    loop {
+        let prev = clean_str.clone();
+        for s_suffix in [
+            " الموسم الاول", " الموسم الأول", " الموسم الثاني", " الموسم الثالث", " الموسم الرابع", " الموسم الخامس",
+            " الموسم السادس", " الموسم السابع", " الموسم الثامن", " الموسم التاسع", " الموسم العاشر",
+            " الجزء الاول", " الجزء الأول", " الجزء الثاني", " الجزء الثالث", " الجزء الرابع", " الجزء الخامس",
+            " الجزء السادس", " الجزء السابع", " الجزء الثامن", " الجزء التاسع", " الجزء العاشر",
+            " الموسم", " الجزء", " موسم", " جزء",
+        ] {
+            if clean_str.ends_with(s_suffix) {
+                clean_str = clean_str[..clean_str.len() - s_suffix.len()].trim().to_owned();
+                break;
+            }
+        }
+        for s_prefix in [" الموسم ", " موسم ", " الجزء ", " جزء ", " Season ", " season ", " S", " s"] {
+            if let Some(pos) = clean_str.rfind(s_prefix) {
+                let rest = &clean_str[pos + s_prefix.len()..];
+                if rest.chars().all(|c| c.is_ascii_digit()) {
+                    clean_str = clean_str[..pos].trim().to_owned();
+                    break;
+                }
+            }
+        }
+        clean_str = clean_title(&clean_str);
+        if clean_str == prev {
+            break;
+        }
+    }
+    clean_str.trim().to_owned()
+}
+
+pub fn build_series_identity(series: &Value, target_edition: &str) -> Value {
+    let raw_title = field(series, "title");
+    let clean = clean_series_title(&raw_title);
+    let series_title = field(series, "seriesTitle");
+    let clean_st = if !series_title.is_empty() {
+        clean_series_title(&series_title)
+    } else {
+        clean.clone()
+    };
+    let mut aliases: Vec<String> = Vec::new();
+    if let Some(arr) = series["aliases"].as_array() {
+        for a in arr.iter().filter_map(Value::as_str) {
+            let a_clean = clean_series_title(a);
+            if !a_clean.is_empty() && !aliases.contains(&a_clean) {
+                aliases.push(a_clean);
+            }
+        }
+    }
+    for key in ["ar_title", "en_title", "other_title"] {
+        let val = field(series, key);
+        if !val.is_empty() {
+            let v_clean = clean_series_title(&val);
+            if !v_clean.is_empty() && !aliases.contains(&v_clean) {
+                aliases.push(v_clean);
+            }
+        }
+    }
+    let is_movie = kind(series) == "movie";
+    json!({
+        "title": clean,
+        "seriesTitle": clean_st,
+        "ar_title": field(series, "ar_title"),
+        "en_title": field(series, "en_title"),
+        "other_title": field(series, "other_title"),
+        "aliases": aliases,
+        "year": field(series, "year"),
+        "season": season(series),
+        "url": field(series, "url"),
+        "seriesUrl": field(series, "seriesUrl"),
+        "type": if is_movie { "movie" } else { "series" },
+        "mediaType": if is_movie { "movie" } else { "series" },
+        "edition": target_edition
+    })
 }
 
 pub fn slug_from_url(url: &str) -> Option<String> {
@@ -655,15 +833,21 @@ pub fn find_counterpart_with_edition(
     candidates: &[Value],
     target_edition: Option<&str>,
 ) -> Option<Value> {
-    let titles = titles(item);
-    if titles.is_empty() || (kind(item) != "series" && field(item, "seriesUrl").is_empty()) {
+    let item_titles = titles(item);
+    if item_titles.is_empty() {
         return None;
     }
-    let year = field(item, "year");
+    let is_movie = kind(item) == "movie";
+    if !is_movie && kind(item) != "series" && field(item, "seriesUrl").is_empty() {
+        return None;
+    }
     let desired_edition = target_edition.unwrap_or_else(|| edition(item));
+    let item_year = field(item, "year");
+    let item_season = season(item);
 
-    let matches: Vec<Value> = candidates
-        .iter()
+    let candidates_merged = merge(candidates, "cinemana");
+    let edition_matched: Vec<Value> = candidates_merged
+        .into_iter()
         .filter(|candidate| {
             let ed_matches = edition(candidate) == desired_edition
                 || candidate["editions"].as_array().map_or(false, |eds| {
@@ -672,52 +856,104 @@ pub fn find_counterpart_with_edition(
                 || candidate["offers"].as_array().map_or(false, |offers| {
                     offers.iter().any(|o| edition(o) == desired_edition)
                 });
-            (kind(candidate) == "series" || !field(candidate, "seriesUrl").is_empty())
-                && ed_matches
-                && compatible_year(&year, &field(candidate, "year"))
-                && self::titles(candidate)
-                    .iter()
-                    .any(|title| titles.contains(title))
+            if !ed_matches {
+                return false;
+            }
+            if is_movie {
+                kind(candidate) == "movie"
+            } else {
+                kind(candidate) == "series" || !field(candidate, "seriesUrl").is_empty()
+            }
         })
-        .cloned()
         .collect();
-    let matches = merge(&matches, "cinemana");
-    let target = if matches.len() == 1 {
-        matches.into_iter().next()
-    } else if matches.len() > 1 && !year.is_empty() {
-        matches.into_iter().find(|m| field(m, "year") == year)
-    } else if matches.is_empty() {
-        let fuzzy: Vec<Value> = candidates
-            .iter()
-            .filter(|candidate| {
-                let ed_matches = edition(candidate) == desired_edition
-                    || candidate["editions"].as_array().map_or(false, |eds| {
-                        eds.iter().any(|e| e.as_str() == Some(desired_edition))
-                    })
-                    || candidate["offers"].as_array().map_or(false, |offers| {
-                        offers.iter().any(|o| edition(o) == desired_edition)
-                    });
-                (kind(candidate) == "series" || !field(candidate, "seriesUrl").is_empty())
-                    && ed_matches
-                    && compatible_year(&year, &field(candidate, "year"))
-                    && self::titles(candidate).iter().any(|ct| {
-                        titles.iter().any(|t| {
-                            (t.len() >= 4 && ct.contains(t.as_str()))
-                                || (ct.len() >= 4 && t.contains(ct.as_str()))
+
+    if edition_matched.is_empty() {
+        return None;
+    }
+
+    let year_compatible: Vec<Value> = edition_matched
+        .into_iter()
+        .filter(|c| compatible_year(&item_year, &field(c, "year")))
+        .collect();
+
+    if year_compatible.is_empty() {
+        return None;
+    }
+
+    let mut scored: Vec<(i32, Value)> = year_compatible
+        .into_iter()
+        .filter_map(|candidate| {
+            let c_titles = titles(&candidate);
+            let mut score = 0;
+
+            let exact = c_titles.iter().any(|ct| item_titles.contains(ct));
+            if exact {
+                score += 100;
+            } else {
+                let max_overlap = c_titles.iter().map(|ct| {
+                    let c_words: HashSet<&str> = ct.split_whitespace().collect();
+                    item_titles.iter().map(|it| {
+                        let it_words: HashSet<&str> = it.split_whitespace().collect();
+                        let common = c_words.intersection(&it_words).count();
+                        if it_words.is_empty() { 0 } else { (common * 60) / it_words.len() }
+                    }).max().unwrap_or(0)
+                }).max().unwrap_or(0);
+                if max_overlap >= 30 {
+                    score += max_overlap as i32;
+                } else {
+                    let sub = c_titles.iter().any(|ct| {
+                        item_titles.iter().any(|it| {
+                            (it.len() >= 4 && ct.contains(it.as_str()))
+                                || (ct.len() >= 4 && it.contains(ct.as_str()))
                         })
-                    })
-            })
-            .cloned()
-            .collect();
-        let fuzzy = merge(&fuzzy, "cinemana");
-        if fuzzy.len() == 1 {
-            fuzzy.into_iter().next()
-        } else {
-            None
+                    });
+                    if sub {
+                        score += 35;
+                    }
+                }
+            }
+
+            if score < 35 {
+                return None;
+            }
+
+            let c_year = field(&candidate, "year");
+            if !item_year.is_empty() && !c_year.is_empty() {
+                if item_year == c_year {
+                    score += 25;
+                } else if compatible_year(&item_year, &c_year) {
+                    score += 10;
+                }
+            }
+
+            if !is_movie {
+                let c_season = season(&candidate);
+                if !item_season.is_empty() && !c_season.is_empty() {
+                    if item_season == c_season {
+                        score += 35;
+                    } else {
+                        score -= 25;
+                    }
+                }
+            }
+
+            Some((score, candidate))
+        })
+        .collect();
+
+    scored.sort_by(|a, b| b.0.cmp(&a.0));
+
+    if scored.len() >= 2 && item_year.is_empty() {
+        if scored[0].0 == scored[1].0 {
+            let y0 = field(&scored[0].1, "year");
+            let y1 = field(&scored[1].1, "year");
+            if !y0.is_empty() && !y1.is_empty() && y0 != y1 {
+                return None;
+            }
         }
-    } else {
-        None
-    };
+    }
+
+    let target = scored.into_iter().next().map(|(_, cand)| cand);
 
     if let Some(target) = target {
         if let Some(offers) = target["offers"].as_array() {
@@ -772,6 +1008,36 @@ mod tests {
         .is_none());
         assert_eq!(edition(&json!({"title":"مسلسل التجربة مدبلج"})), "dubbed");
         assert_eq!(edition(&json!({"en_title":"Show Undubbed"})), "original");
+    }
+    #[test]
+    fn towards_zero_and_complex_edition_counterpart_matching() {
+        let towards_zero_subbed = json!({
+            "url": "https://krmzi.org/series/towards-zero",
+            "title": "Towards Zero",
+            "ar_title": "نحو الصفر",
+            "type": "series",
+            "year": 2025
+        });
+        let towards_zero_dubbed = json!({
+            "url": "cinemana:999888",
+            "title": "Towards Zero (مدبلج)",
+            "ar_title": "نحو الصفر (مدبلج)",
+            "type": "series",
+            "year": 2025
+        });
+        let identity = build_series_identity(&towards_zero_subbed, "dubbed");
+        let matched = find_counterpart_with_edition(&identity, &[towards_zero_dubbed], Some("dubbed"));
+        assert!(matched.is_some());
+        assert_eq!(matched.unwrap()["url"], "cinemana:999888");
+
+        assert_eq!(
+            clean_series_title("مسلسل هذا البحر سوف يفيض مدبلج الموسم الاول الحلقة 5"),
+            "هذا البحر سوف يفيض"
+        );
+        assert_eq!(clean_series_title("Towards Zero (Dubbed)"), "Towards Zero");
+        assert_eq!(clean_series_title("Towards Zero [مدبلج]"), "Towards Zero");
+        assert_eq!(season_from_text("مسلسل الحفرة الموسم الثاني"), Some("2".into()));
+        assert_eq!(season_from_text("مسلسل كذا الجزء 4"), Some("4".into()));
     }
     #[test]
     fn aliases_and_arabic_identity_keep_both_sources() {

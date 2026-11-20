@@ -213,18 +213,31 @@ fn card(item: &Value) -> Value {
         || text(item, "mediaType") == "movie"
         || text(item, "type") == "movie"
         || (text(item, "rootSeries") == "0" && text(item, "kind") != "2");
-    let aliases: Vec<String> = ["en_title", "other_title"]
-        .iter()
-        .map(|key| text(item, key))
-        .filter(|value| !value.is_empty())
-        .collect();
+    let primary_title = title(item);
+    let mut aliases: Vec<String> = Vec::new();
+    for key in ["ar_title", "en_title", "other_title"] {
+        let val = text(item, key);
+        if !val.is_empty() && val != primary_title && !aliases.contains(&val) {
+            aliases.push(val);
+        }
+    }
     json!({
-        "url":format!("cinemana:{}",text(item,"nb")), "title":title(item),
-        "thumbnail":first_text(item,&["imgObjUrl","imgMediumThumbObjUrl","imgThumbObjUrl"]),
-        "artwork":artwork(item),"seriesTitle":title(item),"source":"cinemana","aliases":aliases,"edition":catalogue::edition(item),
-        "mediaType":if movie {"movie"} else {"series"},"type":if movie {"episode"} else {"series"},
-        "year":text(item,"year"),"rating":text(item,"stars"),
-        "seriesUrl":if movie {String::new()} else {format!("cinemana:{}",root_id(item))}
+        "url": format!("cinemana:{}", text(item, "nb")),
+        "title": primary_title,
+        "ar_title": text(item, "ar_title"),
+        "en_title": text(item, "en_title"),
+        "other_title": text(item, "other_title"),
+        "thumbnail": first_text(item, &["imgObjUrl", "imgMediumThumbObjUrl", "imgThumbObjUrl"]),
+        "artwork": artwork(item),
+        "seriesTitle": primary_title,
+        "source": "cinemana",
+        "aliases": aliases,
+        "edition": catalogue::edition(item),
+        "mediaType": if movie { "movie" } else { "series" },
+        "type": if movie { "episode" } else { "series" },
+        "year": text(item, "year"),
+        "rating": text(item, "stars"),
+        "seriesUrl": if movie { String::new() } else { format!("cinemana:{}", root_id(item)) }
     })
 }
 
