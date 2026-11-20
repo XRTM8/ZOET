@@ -488,6 +488,7 @@ fn open(url: String, resume: Option<PlaybackSnapshot>, fresh: bool) {
     bridge_metadata(&ep_title, &series_title);
     loading("جاري تجهيز الحلقة…");
     show_hud(false);
+    focus("centerPlay");
     spawn_local(async move {
         let mut params = vec![("url", url.clone())];
         if fresh {
@@ -3010,20 +3011,51 @@ fn keyboard(event: Event) {
         remote_arrow(&key);
         return;
     }
-    if tv
-        && key == "enter"
-        && event
-            .target()
-            .and_then(|t| t.dyn_into::<Element>().ok())
-            .is_some_and(|e| e.id() == "playerCanvas")
-    {
+    if tv && key == "enter" {
         event.prevent_default();
+        if !is_hud_visible() {
+            show_hud(true);
+            focus("centerPlay");
+            return;
+        }
+        if let Some(active) = document().active_element() {
+            if active.id() == "centerPlay" {
+                toggle();
+                return;
+            }
+            if active.id() == "centerRewind" {
+                seek(-10.);
+                pill("-10 ثوانٍ");
+                return;
+            }
+            if active.id() == "centerForward" {
+                seek(10.);
+                pill("+10 ثوانٍ");
+                return;
+            }
+            if let Ok(btn) = active.dyn_into::<HtmlElement>() {
+                btn.click();
+                return;
+            }
+        }
         toggle();
         return;
     }
     let v = video();
     let mut handled = true;
     match key.as_str() {
+        "escape" => {
+            if !el("sheetBackdrop").class_list().contains("hidden") {
+                app::close_sheet();
+                return;
+            }
+            if is_hud_visible() {
+                hide_hud();
+                return;
+            }
+            close();
+            return;
+        }
         " " | "k" | "mediaplaypause" => {
             if key == " "
                 && event
@@ -3086,19 +3118,99 @@ fn keyboard(event: Event) {
     }
 }
 pub(crate) fn remote_arrow(key: &str) {
-    if el("playerHudTop").class_list().contains("hud-hidden") {
+    if !is_hud_visible() {
         if key == "arrowleft" || key == "arrowright" {
             let delta = if key == "arrowleft" { -10. } else { 10. };
             seek(delta);
             let label = if delta > 0. { "+10 ثوانٍ" } else { "-10 ثوانٍ" };
             pill(label);
             show_hud(true);
+            focus("centerPlay");
             return;
         }
-        show_hud(false);
+        if key == "arrowup" {
+            show_hud(true);
+            focus("centerPlay");
+            return;
+        }
+        if key == "arrowdown" {
+            show_hud(true);
+            focus("openEpisodesSheetBtn");
+            return;
+        }
+        show_hud(true);
         focus("centerPlay");
         return;
     }
+
+    // When HUD is visible, handle row-based D-Pad jumps:
+    let curr_id = document().active_element().map(|e| e.id()).unwrap_or_default();
+    match curr_id.as_str() {
+        "centerPlay" | "centerRewind" | "centerForward" => {
+            if key == "arrowdown" {
+                focus("openEpisodesSheetBtn");
+                return;
+            }
+            if key == "arrowup" {
+                focus("dismissPlayerBtn");
+                return;
+            }
+            if key == "arrowleft" {
+                if curr_id == "centerRewind" {
+                    focus("centerPlay");
+                } else if curr_id == "centerPlay" {
+                    focus("centerForward");
+                }
+                return;
+            }
+            if key == "arrowright" {
+                if curr_id == "centerForward" {
+                    focus("centerPlay");
+                } else if curr_id == "centerPlay" {
+                    focus("centerRewind");
+                }
+                return;
+            }
+        }
+        "dismissPlayerBtn" | "playerFavBtn" => {
+            if key == "arrowdown" {
+                focus("centerPlay");
+                return;
+            }
+            if key == "arrowleft" || key == "arrowright" {
+                if curr_id == "dismissPlayerBtn" {
+                    focus("playerFavBtn");
+                } else {
+                    focus("dismissPlayerBtn");
+                }
+                return;
+            }
+        }
+        "openEpisodesSheetBtn" | "openServersSheetBtn" | "openQualitySheetBtn" | "toggleSubtitlesBtn" => {
+            if key == "arrowup" {
+                focus("centerPlay");
+                return;
+            }
+            let bottom_btns = ["openEpisodesSheetBtn", "openServersSheetBtn", "openQualitySheetBtn", "toggleSubtitlesBtn"];
+            if let Some(pos) = bottom_btns.iter().position(|&id| id == curr_id) {
+                if key == "arrowleft" && pos + 1 < bottom_btns.len() {
+                    focus(bottom_btns[pos + 1]);
+                    return;
+                }
+                if key == "arrowright" && pos > 0 {
+                    focus(bottom_btns[pos - 1]);
+                    return;
+                }
+            }
+        }
+        _ => {
+            if key == "arrowup" {
+                focus("centerPlay");
+                return;
+            }
+        }
+    }
+
     let Ok(nodes) =
         el("mobilePlayer").query_selector_all("button,input,select,[tabindex='0'],[role='slider']")
     else {

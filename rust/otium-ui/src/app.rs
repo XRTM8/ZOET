@@ -139,7 +139,7 @@ pub fn open_sheet(title: &str, markup: &str) {
     if is_tv {
         // On TV, focus the primary action or first row, not the close button
         if let Some(btn) = el("sheetBody")
-            .query_selector(".series-resume-btn, .sheet-row, .episode-card")
+            .query_selector(".series-resume-btn, .sheet-row, .season-tab.active, .episode-card")
             .ok()
             .flatten()
         {
@@ -148,6 +148,7 @@ pub fn open_sheet(title: &str, markup: &str) {
                 return;
             }
         }
+        return;
     }
     focus("closeSheetBtn");
 }
@@ -1610,7 +1611,7 @@ fn render_series_detail(series: &Value) {
         let movie_url = s(series, "url");
         format!(
             "<div class=\"series-episode-heading\"><h5>الفيلم</h5><span>فيلم كامل</span></div>\
-            <div class=\"sheet-episode-grid episode-card-list\">\
+            <div class=\"sheet-episode-grid episode-card-list media-grid\">\
                 <button class=\"sheet-episode-btn\" data-action=\"episode\" data-url=\"{}\">\
                     <span class=\"sheet-ep-num\">{}</span>\
                     <div class=\"sheet-ep-text\"><strong>تشغيل الفيلم</strong><span>مشاهدة فورية</span></div>\
@@ -1626,7 +1627,7 @@ fn render_series_detail(series: &Value) {
             <label class=\"episode-search\">{}\
                 <input id=\"sheetEpisodeSearch\" type=\"search\" placeholder=\"ابحث عن حلقة\" aria-label=\"ابحث عن حلقة\">\
             </label>\
-            <div class=\"sheet-episode-grid episode-card-list\" id=\"seriesEpisodeList\" data-season=\"{}\"></div>",
+            <div class=\"sheet-episode-grid episode-card-list media-grid\" id=\"seriesEpisodeList\" data-season=\"{}\"></div>",
             episodes.len(),
             icons::SEARCH,
             esc(seasons.first().map(String::as_str).unwrap_or("1"))
@@ -1636,23 +1637,27 @@ fn render_series_detail(series: &Value) {
     open_sheet(
         sheet_heading,
         &format!(
-            "<div class=\"series-detail-hero\">\
-                <img class=\"series-detail-poster\" src=\"{}\" alt=\"\" referrerpolicy=\"no-referrer\">\
-                <div class=\"series-detail-shade\"></div>\
-                <div class=\"series-detail-info\">\
-                    <div class=\"series-badges-row\">\
-                        <span class=\"series-source-tag\">{}</span>\
-                        {}{}{}\
+            "<div class=\"series-detail-pane-meta\">\
+                <div class=\"series-detail-hero\">\
+                    <img class=\"series-detail-poster\" src=\"{}\" alt=\"\" referrerpolicy=\"no-referrer\">\
+                    <div class=\"series-detail-shade\"></div>\
+                    <div class=\"series-detail-info\">\
+                        <div class=\"series-badges-row\">\
+                            <span class=\"series-source-tag\">{}</span>\
+                            {}{}{}\
+                        </div>\
+                        <h4>{}</h4>\
+                        {}\
                     </div>\
-                    <h4>{}</h4>\
-                    {}\
                 </div>\
+                {}\
+                {}\
+                <p class=\"series-detail-story\" id=\"seriesStory\">{}</p>\
+                {}\
             </div>\
-            {}\
-            <p class=\"series-detail-story\" id=\"seriesStory\">{}</p>\
-            {}\
-            {}\
-            {}",
+            <div class=\"series-detail-pane-episodes\">\
+                {}\
+            </div>",
             esc(&poster),
             source_name(catalogue::provider(series)),
             ed_pill,
@@ -1660,15 +1665,32 @@ fn render_series_detail(series: &Value) {
             rate_tag,
             esc(&clean_title),
             edition_switcher,
+            quick_resume_btn,
             providers,
             esc(&s(series, "story")),
             story_toggle,
-            quick_resume_btn,
             episode_section
         ),
     );
     if !is_movie {
         render_detail_episodes();
+    }
+    let is_tv = document()
+        .document_element()
+        .and_then(|e| e.get_attribute("data-display"))
+        .as_deref()
+        == Some("tv");
+    if is_tv {
+        if let Some(target) = el("sheetBody")
+            .query_selector(".series-resume-btn, .sheet-episode-grid .episode-card, .season-tab.active")
+            .ok()
+            .flatten()
+        {
+            if let Ok(elem) = target.dyn_into::<HtmlElement>() {
+                let _ = elem.focus();
+                tv_scroll_into_view(&elem);
+            }
+        }
     }
 }
 fn switch_detail_edition(target_edition: String, title: String) {
@@ -1779,7 +1801,7 @@ fn render_detail_episodes() {
     let episodes = series["episodes"].as_array().cloned().unwrap_or_default();
     let markup=episodes.iter().filter(|ep|{let ep_season=s(ep,"season");(ep_season==season || (ep_season.is_empty()&&season=="1"))&&search::episode_matches(&s(ep,"title"),&catalogue::episode_number(ep),&query)}).enumerate().map(|(index,ep)|{
         let number=catalogue::episode_number(ep);
-        format!("<button class=\"episode-card sheet-episode-btn\" data-action=\"episode\" data-url=\"{}\"><span class=\"episode-number\">{}</span><span class=\"episode-copy\"><strong>{}</strong><small>{}</small></span><span class=\"episode-play\">{}</span></button>",esc(&s(ep,"url")),if number.is_empty(){(index+1).to_string()}else{esc(&number)},esc(&s(ep,"title")),esc(&s(&series,"title")),icons::PLAY)
+        format!("<button class=\"episode-card sheet-episode-btn\" data-action=\"episode\" data-url=\"{}\" data-index=\"{}\"><span class=\"episode-number\">{}</span><span class=\"episode-copy\"><strong>{}</strong><small>{}</small></span><span class=\"episode-play\">{}</span></button>",esc(&s(ep,"url")),index,if number.is_empty(){(index+1).to_string()}else{esc(&number)},esc(&s(ep,"title")),esc(&s(&series,"title")),icons::PLAY)
     }).collect::<String>();
     list.set_inner_html(if markup.is_empty() {
         "<p class=\"empty-note\">لا توجد حلقات مطابقة.</p>"
@@ -2363,6 +2385,14 @@ fn grid_navigate(grid: &Element, current: &Element, key: &str) -> bool {
                 }
             } else if idx % cols != 0 {
                 Some(idx - 1)
+            } else if is_tv && grid.id() == "seriesEpisodeList" {
+                if let Some(resume_btn) = document().query_selector(".series-resume-btn").ok().flatten() {
+                    if let Ok(elem) = resume_btn.dyn_into::<HtmlElement>() {
+                        let _ = elem.focus();
+                        return true;
+                    }
+                }
+                return true;
             } else {
                 return true;
             }
@@ -2379,6 +2409,14 @@ fn grid_navigate(grid: &Element, current: &Element, key: &str) -> bool {
         "ArrowUp" => {
             if idx >= cols {
                 Some(idx - cols)
+            } else if is_tv && grid.id() == "seriesEpisodeList" {
+                if let Some(tab) = document().query_selector(".season-tab.active, .season-tab").ok().flatten() {
+                    if let Ok(elem) = tab.dyn_into::<HtmlElement>() {
+                        let _ = elem.focus();
+                        return true;
+                    }
+                }
+                None
             } else if is_tv {
                 let top_btn = if el("tabMovies").class_list().contains("active") {
                     "tabMovies"

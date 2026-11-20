@@ -571,12 +571,7 @@ class MainActivity : AppCompatActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
             setBackgroundColor(Color.TRANSPARENT)
-            val isTv = KrmziBridge().isTelevision()
-            if (isTv) {
-                setLayerType(View.LAYER_TYPE_HARDWARE, null)
-            } else {
-                setLayerType(View.LAYER_TYPE_NONE, null)
-            }
+            setLayerType(View.LAYER_TYPE_NONE, null)
             overScrollMode = View.OVER_SCROLL_NEVER
             isVerticalScrollBarEnabled = false
             isHorizontalScrollBarEnabled = false
