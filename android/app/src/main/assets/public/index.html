@@ -69,7 +69,7 @@
   </header>
 
   <main class="content-canvas" id="contentCanvas">
-    <section class="source-switcher" id="sourceSwitcher" aria-label="المصادر">
+    <section class="source-switcher hidden" id="sourceSwitcher" aria-label="المصادر">
       <span class="source-label">المصادر</span>
       <div class="source-options">
         <button class="source-option active" data-source="all" aria-pressed="true">الكل</button>
@@ -150,7 +150,7 @@
           </div>
         </div>
 
-        <div class="settings-section-label">المصادر وبوابة الاتصال</div>
+        <div class="settings-section-label">مزود المحتوى</div>
         <div class="settings-group">
           <div class="settings-row">
             <div class="settings-row-info">
@@ -158,36 +158,12 @@
                 <svg class="z-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="6.5" rx="2"/><rect x="3.5" y="13.5" width="17" height="6.5" rx="2"/><circle cx="7.5" cy="7.25" r="0.9" fill="currentColor" stroke="none"/><circle cx="7.5" cy="16.75" r="0.9" fill="currentColor" stroke="none"/></svg>
               </span>
               <div>
-                <h3>المصدر الافتراضي</h3>
-                <p>تحديد مزود المحتوى في القائمة والبحث.</p>
+                <h3>شبكتي سينمانا</h3>
+                <p>بث مباشر رسمي عالي الدقة (MP4/HLS) بدون إعلانات وبمشغل أصلي 100%.</p>
               </div>
             </div>
             <div class="source-options settings-source-pills">
-              <button class="source-option" data-pref-source="all" aria-pressed="false">الكل</button>
-              <button class="source-option" data-pref-source="krmzi" aria-pressed="false">قرمزي</button>
-              <button class="source-option" data-pref-source="cinemana" aria-pressed="false">سينمانا</button>
-            </div>
-          </div>
-
-          <div class="settings-row settings-server-row hidden" id="webServerSettingsRow">
-            <div class="settings-server-head">
-              <div class="settings-row-info">
-                <span class="settings-row-ico" aria-hidden="true">
-                  <svg class="z-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8M12 3a13.5 13.5 0 0 1 0 18M12 3a13.5 13.5 0 0 0 0 18"/></svg>
-                </span>
-                <div>
-                  <h3>خادم الاتصال للويب</h3>
-                  <p>اختياري: اربط Cloudflare Worker أو خادماً محلياً لتشغيل قرمزي في المتصفح.</p>
-                </div>
-              </div>
-            </div>
-            <div class="settings-server-controls">
-              <input type="url" id="serverUrlInput" class="settings-input" dir="ltr" placeholder="https://zoet-gateway.yourname.workers.dev" aria-label="رابط خادم الاتصال">
-              <div class="settings-server-actions">
-                <button class="settings-btn primary" id="saveServerBtn">حفظ وتطبيق</button>
-                <button class="settings-btn" id="testServerBtn">فحص الاتصال</button>
-              </div>
-              <p id="serverStatusMsg" class="settings-server-status" role="status"></p>
+              <button class="source-option active" data-pref-source="cinemana" aria-pressed="true">مفعّل</button>
             </div>
           </div>
         </div>

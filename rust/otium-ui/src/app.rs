@@ -53,10 +53,7 @@ impl Default for State {
         Self {
             view: "series".into(),
             last_catalog_view: "series".into(),
-            source: storage("zoet_source")
-                .or_else(|| storage("otium_source"))
-                .filter(|s| ["all", "krmzi", "cinemana"].contains(&s.as_str()))
-                .unwrap_or("all".into()),
+            source: "cinemana".into(),
             main: Listing::default(),
             search: Listing::default(),
             series: vec![],
@@ -605,10 +602,6 @@ fn card(item: &Value) -> String {
         .trim_end_matches("- قرمزي")
         .trim();
     let title = if trimmed.is_empty() { &raw_title } else { trimmed };
-    let sources = item["sources"]
-        .as_array()
-        .cloned()
-        .unwrap_or(vec![json!(catalogue::provider(item))]);
     let has_both = item["has_both_editions"].as_bool().unwrap_or(false)
         || item["editions"]
             .as_array()
@@ -621,25 +614,30 @@ fn card(item: &Value) -> String {
     } else {
         String::new()
     };
-    let badges = sources
-        .iter()
-        .filter_map(Value::as_str)
-        .map(|source| {
-            format!(
-                "<span class=\"provider-tag provider-{source}\">{}</span>",
-                source_name(source)
-            )
-        })
-        .collect::<String>();
     let year = s(item, "year");
     let rating = s(item, "rating");
-    let meta = match (year.is_empty(), rating.is_empty()) {
-        (false, false) => format!("<span>{}</span><span class=\"meta-dot\">·</span><span class=\"tile-rate\">{} {}</span>", esc(&year), icons::STAR, esc(&rating)),
-        (false, true) => format!("<span>{}</span>", esc(&year)),
-        (true, false) => format!("<span class=\"tile-rate\">{} {}</span>", icons::STAR, esc(&rating)),
-        (true, true) => String::new(),
+    let rating_clean = rating.trim();
+    let rating_badge = if !rating_clean.is_empty() && rating_clean != "0" {
+        format!(
+            "<span class=\"poster-rating\">{} {}</span>",
+            icons::STAR,
+            esc(rating_clean)
+        )
+    } else {
+        String::new()
     };
-    format!("<button class=\"series-tile\" data-action=\"{kind}\" data-url=\"{}\"><span class=\"poster-frame\"><img class=\"series-tile-thumb\" src=\"{}\" alt=\"\" loading=\"lazy\" decoding=\"async\" referrerpolicy=\"no-referrer\">{edition_badge}</span><span class=\"series-tile-body\"><span class=\"series-tile-title\">{}</span><span class=\"series-tile-meta\"><span class=\"series-tile-sub\">{meta}</span><span class=\"catalogue-sources\">{badges}</span></span></span></button>",esc(&s(item,"url")),esc(&thumbnail),esc(&title))
+    let media_type = s(item, "mediaType");
+    let type_badge = if media_type == "movie" {
+        "<span class=\"poster-type-badge\">فيلم</span>"
+    } else {
+        "<span class=\"poster-type-badge\">مسلسل</span>"
+    };
+    let year_str = if !year.is_empty() {
+        format!("<span class=\"series-tile-sub\">{}</span>", esc(&year))
+    } else {
+        String::new()
+    };
+    format!("<button class=\"series-tile\" data-action=\"{kind}\" data-url=\"{}\"><span class=\"poster-frame\"><img class=\"series-tile-thumb\" src=\"{}\" alt=\"{}\" loading=\"lazy\" decoding=\"async\" referrerpolicy=\"no-referrer\"><span class=\"poster-gradient\" aria-hidden=\"true\"></span>{edition_badge}{rating_badge}{type_badge}</span><span class=\"series-tile-body\"><span class=\"series-tile-title\">{}</span><span class=\"series-tile-meta\">{year_str}</span></span></button>",esc(&s(item,"url")),esc(&thumbnail),esc(title),esc(title))
 }
 fn render_grid(id: &str, items: &[Value]) {
     let grid = el(id);
@@ -949,13 +947,7 @@ fn load_listing(search: bool, reset: bool) {
             list.abort = AbortController::new().ok();
             list.source = source.clone();
             list.needs_refresh = false;
-            let providers = if !search && mode == "movies" {
-                vec!["cinemana"]
-            } else if source == "all" {
-                vec!["krmzi", "cinemana"]
-            } else {
-                vec![source.as_str()]
-            };
+            let providers = vec!["cinemana"];
             for provider in providers {
                 list.pages.insert(
                     provider.into(),
@@ -1094,7 +1086,7 @@ pub fn set_view(view: &str) {
         show("settingsView", view == "settings");
     }
     show("seriesSection", in_catalog);
-    show("sourceSwitcher", in_catalog);
+    show("sourceSwitcher", false);
     if document().get_element_by_id("catalogueTabs").is_some() {
         show("catalogueTabs", in_catalog || is_tv);
     }

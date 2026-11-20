@@ -220,7 +220,7 @@ fn card(item: &Value) -> Value {
         .collect();
     json!({
         "url":format!("cinemana:{}",text(item,"nb")), "title":title(item),
-        "thumbnail":first_text(item,&["imgMediumThumbObjUrl","imgObjUrl","imgThumbObjUrl"]),
+        "thumbnail":first_text(item,&["imgObjUrl","imgMediumThumbObjUrl","imgThumbObjUrl"]),
         "artwork":artwork(item),"seriesTitle":title(item),"source":"cinemana","aliases":aliases,"edition":catalogue::edition(item),
         "mediaType":if movie {"movie"} else {"series"},"type":if movie {"episode"} else {"series"},
         "year":text(item,"year"),"rating":text(item,"stars"),
@@ -253,12 +253,7 @@ pub async fn call_with_signal(
     signal: Option<&AbortSignal>,
 ) -> Result<Value, String> {
     let url = parameter(params, "url");
-    let inferred = if url.starts_with("cinemana:") {
-        "cinemana"
-    } else {
-        "krmzi"
-    };
-    if source.unwrap_or(inferred) != "cinemana" {
+    if source == Some("krmzi") && !url.starts_with("cinemana:") {
         let query = params
             .iter()
             .map(|(key, value)| format!("{}={}", encoded(key), encoded(value)))
