@@ -157,6 +157,28 @@ pub async fn request_json(url: &str, signal: Option<&AbortSignal>) -> Result<Val
     request(url, signal).await
 }
 
+pub async fn fetch_text(url: &str) -> Result<String, String> {
+    let window = web_sys::window().ok_or_else(|| "المتصفح غير متاح".to_owned())?;
+    let resp_value = JsFuture::from(window.fetch_with_str(url))
+        .await
+        .map_err(|_| "تعذر الاتصال بالرابط".to_owned())?;
+    let resp = resp_value
+        .dyn_into::<Response>()
+        .map_err(|_| "استجابة غير صالحة".to_owned())?;
+    if !resp.ok() {
+        return Err(format!("المصدر غير متاح ({})", resp.status()));
+    }
+    let body = JsFuture::from(
+        resp.text()
+            .map_err(|_| "تعذر قراءة الاستجابة".to_owned())?,
+    )
+    .await
+    .map_err(|_| "تعذر قراءة الاستجابة".to_owned())?
+    .as_string()
+    .unwrap_or_default();
+    Ok(body)
+}
+
 async fn cinemana_request(path: &str, signal: Option<&AbortSignal>) -> Result<Value, String> {
     request(&format!("/api/cinemana?path={}", encoded(path)), signal).await
 }

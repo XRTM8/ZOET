@@ -989,6 +989,7 @@ fn play_embed(server: Value) {
         pill("جاري فتح السيرفر، المشاهدة مستمرة");
     }
     show("embedPlayer", false);
+    let _ = el("embedPlayer").set_attribute("sandbox", "allow-scripts allow-same-origin allow-presentation");
     let _ = el("embedPlayer").set_attribute("src", &url);
     let frame = el("embedPlayer");
     let loaded = Closure::wrap(Box::new(move |_e: Event| {
@@ -1020,7 +1021,7 @@ fn play_embed(server: Value) {
         text("activeServerLabel", &s(&server, "name"));
         text("activeQualityLabel", "من السيرفر");
         pill("السيرفر الخارجي يتحكم بموضع المشاهدة");
-        show_hud(false);
+        show_hud(true);
     }) as Box<dyn FnMut(Event)>);
     let _ = Reflect::set(frame.as_ref(), &"onload".into(), loaded.as_ref());
     STATE.with(|c| c.borrow_mut().embed_handler = Some(loaded));
@@ -1590,6 +1591,102 @@ fn switch_provider(url: String) {
         load_drawer(s(&candidate_clone, "seriesUrl"), new_session);
     });
 }
+fn decode_base_token(s: &str, base: u32) -> Option<u32> {
+    const CHARSET: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    let mut val: u32 = 0;
+    for &b in s.as_bytes() {
+        let digit = CHARSET.iter().position(|&c| c == b)? as u32;
+        if digit >= base {
+            return None;
+        }
+        val = val.checked_mul(base)?.checked_add(digit)?;
+    }
+    Some(val)
+}
+
+fn unpack_dean_edwards(html: &str) -> Option<String> {
+    let eval_idx = html.find("eval(function(p,a,c,k,e,d)")?;
+    let after_eval = &html[eval_idx..];
+    let call_idx = after_eval.find("}(")? + 2;
+    let after_call = &after_eval[call_idx..];
+
+    let split_token = if after_call.contains(".split('|')") {
+        ".split('|')"
+    } else if after_call.contains(".split(\"|\")") {
+        ".split(\"|\")"
+    } else {
+        return None;
+    };
+    let split_idx = after_call.rfind(split_token)?;
+    let quote_char = after_call[..split_idx]
+        .chars()
+        .rev()
+        .find(|&c| c == '\'' || c == '"')?;
+    let k_end = after_call[..split_idx].rfind(quote_char)?;
+    let k_start = after_call[..k_end].rfind(quote_char)?;
+    let k_raw = &after_call[k_start + 1..k_end];
+    let k: Vec<&str> = k_raw.split('|').collect();
+
+    let before_k = after_call[..k_start].trim().trim_end_matches(',');
+    let mut parts = before_k.rsplitn(3, ',');
+    let _c_str = parts.next()?.trim();
+    let a_str = parts.next()?.trim();
+    let p_raw = parts.next()?.trim();
+
+    let a: u32 = a_str.parse().ok()?;
+    if !(2..=62).contains(&a) {
+        return None;
+    }
+
+    let p_trimmed = p_raw.trim_matches('\'').trim_matches('"');
+    let mut unpacked = String::with_capacity(p_trimmed.len() * 2);
+    let chars: Vec<char> = p_trimmed.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i].is_ascii_alphanumeric() {
+            let start = i;
+            while i < chars.len() && chars[i].is_ascii_alphanumeric() {
+                i += 1;
+            }
+            let tok: String = chars[start..i].iter().collect();
+            if let Some(idx) = decode_base_token(&tok, a) {
+                if let Some(&word) = k.get(idx as usize) {
+                    if !word.is_empty() {
+                        unpacked.push_str(word);
+                        continue;
+                    }
+                }
+            }
+            unpacked.push_str(&tok);
+        } else {
+            unpacked.push(chars[i]);
+            i += 1;
+        }
+    }
+
+    Some(unpacked)
+}
+
+fn extract_stream_url(text: &str) -> Option<String> {
+    for prefix in ["https://", "http://"] {
+        let mut search_from = 0;
+        while let Some(pos) = text[search_from..].find(prefix) {
+            let abs_pos = search_from + pos;
+            let after = &text[abs_pos..];
+            let end = after
+                .find(|c: char| c == '"' || c == '\'' || c == '\\' || c == '<' || c == '>' || c.is_whitespace())
+                .unwrap_or(after.len().min(500));
+            let candidate = &after[..end];
+            if candidate.contains(".m3u8") || candidate.contains(".mp4") {
+                let clean = candidate.replace("\\/", "/").replace("&amp;", "&");
+                return Some(clean);
+            }
+            search_from = abs_pos + prefix.len();
+        }
+    }
+    None
+}
+
 fn switch_mirror(index: usize) {
     let Some(episode) = current_episode() else {
         return;
@@ -1618,30 +1715,74 @@ fn switch_mirror(index: usize) {
         if !switch_current(session, generation, &controller) {
             return;
         }
-        match result {
-            Ok(mut candidate) if !rows(&candidate, "directStreams").is_empty() => {
-                let settings = snapshot();
-                let restore = restore_point();
-                app::close_sheet();
-                candidate["artwork"] = episode["artwork"].clone();
-                STATE.with(|c| {
-                    let mut p = c.borrow_mut();
-                    p.session += 1;
-                    p.episode = Some(candidate);
-                    p.rollback = restore;
-                    p.refreshed = false;
-                });
-                text("activeServerLabel", &server_name);
-                pill(&format!("تم التبديل إلى سيرفر {server_name}"));
-                play_direct(None, settings, false);
-            }
-            Ok(_) | Err(_) => {
-                app::open_sheet(
-                    "السيرفر غير متاح",
-                    "<p class=\"empty-note\">تعذر استخراج البث المباشر من هذا السيرفر. المشاهدة الحالية مستمرة بدون انقطاع.</p>",
-                );
-            }
+        let mut candidate = match result {
+            Ok(c) => c,
+            Err(_) => json!({
+                "url": s(&episode, "url"),
+                "title": s(&episode, "title"),
+                "servers": rows(&episode, "servers"),
+                "directStreams": []
+            }),
+        };
+        if !rows(&candidate, "directStreams").is_empty() {
+            let settings = snapshot();
+            let restore = restore_point();
+            app::close_sheet();
+            candidate["artwork"] = episode["artwork"].clone();
+            STATE.with(|c| {
+                let mut p = c.borrow_mut();
+                p.session += 1;
+                p.episode = Some(candidate);
+                p.rollback = restore;
+                p.refreshed = false;
+            });
+            text("activeServerLabel", &server_name);
+            pill(&format!("تم التبديل إلى سيرفر {server_name}"));
+            play_direct(None, settings, false);
+            return;
         }
+
+        let embed_url = s(&server, "embedUrl");
+        if !embed_url.is_empty() {
+            if let Ok(html) = api::fetch_text(&embed_url).await {
+                if !switch_current(session, generation, &controller) {
+                    return;
+                }
+                let mut stream_opt = extract_stream_url(&html);
+                if stream_opt.is_none() {
+                    if let Some(unpacked) = unpack_dean_edwards(&html) {
+                        stream_opt = extract_stream_url(&unpacked);
+                    }
+                }
+                if let Some(stream_url) = stream_opt {
+                    let settings = snapshot();
+                    let restore = restore_point();
+                    app::close_sheet();
+                    candidate["directStreams"] = json!([{"quality": "تلقائي", "type": "hls", "url": stream_url}]);
+                    candidate["artwork"] = episode["artwork"].clone();
+                    STATE.with(|c| {
+                        let mut p = c.borrow_mut();
+                        p.session += 1;
+                        p.episode = Some(candidate);
+                        p.rollback = restore;
+                        p.refreshed = false;
+                    });
+                    text("activeServerLabel", &server_name);
+                    pill(&format!("تم استخراج وتشغيل بث {server_name} المباشر"));
+                    play_direct(None, settings, false);
+                    return;
+                }
+            }
+            app::close_sheet();
+            play_embed(server.clone());
+            pill(&format!("تم فتح سيرفر {server_name}"));
+            return;
+        }
+
+        app::open_sheet(
+            "السيرفر غير متاح",
+            "<p class=\"empty-note\">تعذر الاتصال بهذا السيرفر حالياً. المشاهدة الحالية مستمرة بدون انقطاع.</p>",
+        );
     });
 }
 pub fn open_quality() {

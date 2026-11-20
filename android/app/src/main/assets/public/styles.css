@@ -808,34 +808,10 @@ video::-webkit-media-controls-panel {
   flex: 0 0 auto;
 }
 
-/* ==================== Embed Mode (Arab HD, estream, etc.) ==================== */
-.player-screen.embed-mode .player-center-ctrl {
-  display: none !important;
-}
-
-.player-screen.embed-mode .touch-surface {
-  display: none !important;
-}
-
-.player-screen.embed-mode .scrub-line {
-  display: none !important;
-}
-
-.player-screen.embed-mode .skip-intro-pill {
-  display: none !important;
-}
-
-.player-screen.embed-mode .speed-chip {
-  display: none !important;
-}
-
-.player-screen.embed-mode .gesture-pill {
-  display: none !important;
-}
-
+/* ==================== Embed Mode (Preserve Native ZOET UI & Block Website Ads) ==================== */
 .player-screen.embed-mode #embedPlayer {
   pointer-events: auto !important;
-  z-index: 5 !important;
+  z-index: 2 !important;
   width: 100% !important;
   height: 100% !important;
   border: none !important;
@@ -843,26 +819,43 @@ video::-webkit-media-controls-panel {
   display: block !important;
 }
 
+.player-screen.embed-mode .player-hud {
+  z-index: 20 !important;
+  pointer-events: none !important;
+}
+
 .player-screen.embed-mode .player-bar-top {
-  pointer-events: none;
-  background: transparent !important;
+  pointer-events: auto !important;
+  background: linear-gradient(180deg, rgba(10, 10, 14, 0.92) 0%, rgba(10, 10, 14, 0.6) 70%, transparent 100%) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
   opacity: 1 !important;
   display: flex !important;
+  z-index: 25 !important;
 }
 
 .player-screen.embed-mode .player-bar-top > * {
-  pointer-events: auto;
+  pointer-events: auto !important;
 }
 
 .player-screen.embed-mode .player-bar-bottom {
   opacity: 1 !important;
   display: flex !important;
-  visibility: visible;
-  pointer-events: none;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  background: linear-gradient(0deg, rgba(10, 10, 14, 0.92) 0%, rgba(10, 10, 14, 0.6) 70%, transparent 100%) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  z-index: 25 !important;
 }
 
 .player-screen.embed-mode .player-bar-bottom > * {
-  pointer-events: auto;
+  pointer-events: auto !important;
+}
+
+.player-screen.embed-mode .player-title-display {
+  display: flex !important;
+  pointer-events: auto !important;
 }
 
 /* Player Sub Drawer */
