@@ -973,7 +973,7 @@ fn play_embed(server: Value) {
     }
     cancel_switch();
     let bookmark = snapshot();
-    let (session, generation, keep_direct) = STATE.with(|c| {
+    let (session, generation, _keep_direct) = STATE.with(|c| {
         let mut p = c.borrow_mut();
         let direct =
             p.embedded.is_none() && p.episode.is_some() && video().get_attribute("src").is_some();
@@ -983,15 +983,40 @@ fn play_embed(server: Value) {
         p.embed_timer = None;
         (p.session, p.switch_generation, direct)
     });
-    if !keep_direct {
-        loading("جاري فتح السيرفر الخارجي…");
-    } else {
-        pill("جاري فتح السيرفر، المشاهدة مستمرة");
-    }
-    show("embedPlayer", false);
-    let _ = el("embedPlayer").set_attribute("sandbox", "allow-scripts allow-same-origin allow-presentation");
-    let _ = el("embedPlayer").set_attribute("src", &url);
+    let server_name = s(&server, "name");
+    text("activeServerLabel", &server_name);
+    text("activeQualityLabel", "من السيرفر");
+    pill(&format!("تم فتح سيرفر {server_name}"));
+
+    // Stop native playback immediately so audio does not overlap
+    stop_hls();
+    let v = video();
+    let _ = v.pause();
+    let _ = v.remove_attribute("src");
+    v.load();
+    show("nativePlayer", false);
+
+    // Prepare embed player and remove sandbox to prevent anti-sandbox rejections (e.g. Red HD)
     let frame = el("embedPlayer");
+    let _ = frame.remove_attribute("sandbox");
+    let _ = frame.set_attribute("allow", "autoplay; fullscreen; encrypted-media; picture-in-picture");
+    let _ = frame.set_attribute("referrerpolicy", "no-referrer");
+    let _ = frame.set_attribute("src", &url);
+    show("embedPlayer", true);
+    show("playerSpinner", false);
+    class("mobilePlayer", "embed-mode", true);
+    class("mobilePlayer", "player-loading", false);
+    class("mobilePlayer", "player-error", false);
+    show_hud(true);
+
+    STATE.with(|c| {
+        let mut p = c.borrow_mut();
+        p.attempt += 1;
+        p.embedded = Some(server.clone());
+        p.embed_timer = None;
+        p.rollback = None;
+    });
+
     let loaded = Closure::wrap(Box::new(move |_e: Event| {
         if STATE.with(|c| {
             let p = c.borrow();
@@ -1000,47 +1025,15 @@ fn play_embed(server: Value) {
             return;
         }
         let _ = Reflect::set(el("embedPlayer").as_ref(), &"onload".into(), &JsValue::NULL);
-        stop_hls();
-        let v = video();
-        let _ = v.pause();
-        let _ = v.remove_attribute("src");
-        v.load();
-        show("nativePlayer", false);
         show("embedPlayer", true);
         show("playerSpinner", false);
         class("mobilePlayer", "embed-mode", true);
         class("mobilePlayer", "player-loading", false);
         class("mobilePlayer", "player-error", false);
-        STATE.with(|c| {
-            let mut p = c.borrow_mut();
-            p.attempt += 1;
-            p.embedded = Some(server.clone());
-            p.embed_timer = None;
-            p.rollback = None;
-        });
-        text("activeServerLabel", &s(&server, "name"));
-        text("activeQualityLabel", "من السيرفر");
-        pill("السيرفر الخارجي يتحكم بموضع المشاهدة");
         show_hud(true);
     }) as Box<dyn FnMut(Event)>);
     let _ = Reflect::set(frame.as_ref(), &"onload".into(), loaded.as_ref());
     STATE.with(|c| c.borrow_mut().embed_handler = Some(loaded));
-    let timer = Timeout::new(15000, move || {
-        if STATE.with(|c| {
-            let p = c.borrow();
-            p.session != session || p.switch_generation != generation || p.embed_timer.is_none()
-        }) {
-            return;
-        }
-        let _ = Reflect::set(el("embedPlayer").as_ref(), &"onload".into(), &JsValue::NULL);
-        let _ = el("embedPlayer").remove_attribute("src");
-        if keep_direct {
-            pill("تعذر فتح السيرفر، المشاهدة مستمرة");
-        } else {
-            error("تعذر فتح السيرفر. اختر سيرفراً آخر.");
-        }
-    });
-    STATE.with(|c| c.borrow_mut().embed_timer = Some(timer));
 }
 fn load_drawer(url: String, session: u64) {
     spawn_local(async move {
