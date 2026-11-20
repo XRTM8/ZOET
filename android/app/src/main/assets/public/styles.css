@@ -91,9 +91,20 @@ img { display: block; max-width: 100%; }
 .offline-card p { color: var(--text-sub); font-size: 12px; margin: 7px 0 12px; }
 .btn-retry { min-height: 42px; color: var(--accent); font-size: 12px; display: flex; align-items: center; gap: 8px; }
 .empty-note { grid-column: 1/-1; color: var(--text-dim); text-align: center; font-size: 13px; line-height: 1.9; padding: 40px 18px; width: 100%; }
-.skeleton-cell { background: #1a1e2c; animation: skeleton 1.4s ease-in-out infinite alternate; }
-.skeleton-poster { aspect-ratio: 3/4; border-radius: 5px; }
-@keyframes skeleton { to { background: #2b2b27; } }
+@keyframes luxury-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.skeleton-cell {
+  background: linear-gradient(90deg, #10131a 0%, #1c222e 50%, #10131a 100%);
+  background-size: 200% 100%;
+  animation: luxury-shimmer 1.8s ease-in-out infinite;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.skeleton-poster {
+  aspect-ratio: 2/3;
+  border-radius: 14px;
+}
 
 /* Video behavior and gesture layers are shared with the previous player. */
 /* ==================== Minimal Player Screen ==================== */
@@ -714,8 +725,12 @@ video::-webkit-media-controls-panel {
   gap: 8px;
   cursor: pointer;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.12s ease;
   white-space: nowrap;
+}
+.action-capsule:active {
+  transform: scale(0.95);
+}
 }
 .action-capsule i, .action-capsule svg {
   color: #94a3b8;
@@ -878,17 +893,95 @@ video::-webkit-media-controls-panel {
 video::cue { font-family: 'Tajawal', sans-serif; font-size: 90%; background: var(--sub-cue-bg, rgba(0, 0, 0, 0.72)); color: var(--sub-cue-color, #ffd700); text-shadow: 0 2px 4px rgba(0, 0, 0, 0.85); }
 
 /* Sheets have one scrolling body, regardless of content length. */
-.sheet-scrim { position: absolute; inset: 0; z-index: 90; background: #000a; display: flex; align-items: flex-end; }
-.sheet-panel { width: 100%; max-height: 87%; min-height: 0; display: flex; flex-direction: column; background: #11131d; border-radius: 14px 14px 0 0; padding: 12px 20px calc(18px + var(--safe-bottom)); gap: 12px; overflow: hidden; border: 1px solid #ffffff12; }
-.sheet-grabber { flex: 0 0 auto; width: 27px; height: 3px; background: #5c5952; border-radius: 2px; margin: 0 auto; }
+.sheet-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 90;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  display: flex;
+  align-items: flex-end;
+  animation: scrim-appear 0.22s var(--ease-out-expo) forwards;
+}
+@keyframes scrim-appear {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.sheet-panel {
+  width: 100%;
+  max-height: 88%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(13, 16, 24, 0.94);
+  backdrop-filter: blur(36px) saturate(160%);
+  -webkit-backdrop-filter: blur(36px) saturate(160%);
+  border-radius: 22px 22px 0 0;
+  padding: 14px 22px calc(20px + var(--safe-bottom));
+  gap: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: none;
+  box-shadow: 0 -16px 48px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  animation: sheet-spring-up 0.34s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes sheet-spring-up {
+  0% { transform: translateY(100%); }
+  100% { transform: translateY(0); }
+}
+.sheet-grabber {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.24);
+  border-radius: 99px;
+  margin: 0 auto 4px;
+  transition: background 0.18s;
+}
+.sheet-grabber:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
 .sheet-head { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .sheet-head h3 { min-width: 0; font-size: 15px; line-height: 1.6; font-weight: 500; }
 .sheet-x-btn { flex: 0 0 44px; min-height: 44px; display: grid; place-items: center; border-radius: 10px; color: var(--text-sub); font-size: 16px; transition: background .16s, color .16s; }
 .sheet-x-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--text-main); }
 .sheet-content { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; }
-.sheet-row { flex: 0 0 auto; width: 100%; min-height: 50px; padding: 12px 14px; background: #1a1e2c; border: 1px solid transparent; border-radius: 5px; font-size: 13px; display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; text-align: right; }
+.sheet-row {
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  font-size: 13.5px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  text-align: right;
+  transition: background 0.18s var(--ease-out-expo), border-color 0.18s ease, transform 0.12s ease;
+}
+.sheet-row:active {
+  transform: scale(0.98);
+  background: rgba(255, 255, 255, 0.08);
+}
+@media (hover: hover) and (pointer: fine) {
+  .sheet-row:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
+  }
+}
+.sheet-row.active {
+  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(59, 130, 246, 0.12);
+  color: #60a5fa;
+}
 .sheet-row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
-.sheet-row.active { border-color: #ccdde166; color: var(--accent); background: #263039; }
 .sheet-pill { flex-shrink: 0; font-size: 10px; color: var(--text-dim); }
 .sheet-pill.direct { color: var(--accent); }
 .sheet-row i, .sheet-row svg { flex-shrink: 0; }
@@ -908,32 +1001,167 @@ video::cue { font-family: 'Tajawal', sans-serif; font-size: 90%; background: var
 .series-episode-heading { flex: 0 0 auto; display: flex; justify-content: space-between; padding: 0 22px 12px; }
 .series-episode-heading h5 { font-size: 19px; font-weight: 500; }
 .series-episode-heading > span { display: none; }
-.season-tabs { display: flex; gap: 5px; overflow-x: auto; flex: 0 0 auto; padding-bottom: 4px; }
-.season-tab { flex: 0 0 auto; min-height: 38px; padding: 7px 13px; border: 1px solid #ffffff1c; border-radius: 4px; color: var(--text-sub); font-size: 11px; }
-.season-tab.active { color: var(--text-main); background: #29343e; border-color: #ffffff30; }
+.season-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  flex: 0 0 auto;
+  padding-bottom: 6px;
+  scrollbar-width: none;
+}
+.season-tabs::-webkit-scrollbar { display: none; }
+.season-tab {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 6px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s cubic-bezier(0.16, 1, 0.3, 1), color 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+}
+.season-tab:active {
+  transform: scale(0.95);
+}
+@media (hover: hover) and (pointer: fine) {
+  .season-tab:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #e2e8f0;
+    border-color: rgba(255, 255, 255, 0.14);
+  }
+}
+.season-tab.active {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
 .sheet-content > .season-tabs { padding-inline: 22px; margin-bottom: 12px; }
 .episode-toolbar { display: flex; flex-direction: column; gap: 10px; }
-.episode-search { flex: 0 0 auto; display: flex; align-items: center; gap: 9px; background: #ffffff05; border: 1px solid #ffffff15; border-radius: 5px; color: var(--text-dim); padding: 0 12px; min-height: 42px; }
-.episode-search input { width: 100%; flex: 1; min-width: 0; min-height: 42px; padding: 9px 0; font-size: 12px; background: none; border: 0; outline: 0; color: var(--text-main); }
-.episode-search:focus-within { border-color: var(--accent); }
+.episode-search {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  color: var(--text-dim);
+  padding: 0 14px;
+  min-height: 42px;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.episode-search input {
+  width: 100%;
+  flex: 1;
+  min-width: 0;
+  min-height: 42px;
+  padding: 9px 0;
+  font-size: 12.5px;
+  background: none;
+  border: 0;
+  outline: 0;
+  color: var(--text-main);
+}
+.episode-search:focus-within {
+  border-color: rgba(59, 130, 246, 0.45);
+  background: rgba(255, 255, 255, 0.07);
+}
 .episode-search i { font-size: 12px; }
-.sheet-content > .episode-search { margin: 0 22px 15px; }
-.episode-card-list { display: flex; flex-direction: column; gap: 0; }
+.sheet-content > .episode-search { margin: 0 22px 14px; }
+.episode-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .drawer-ep-row.episode-card-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-bottom: 15px; }
 .sheet-episode-grid.episode-card-list { flex: 0 0 auto; padding-inline: 22px; }
-.episode-card { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; min-height: 94px; padding: 14px 0; width: 100%; color: var(--text-main); border-bottom: 1px solid #ffffff0e; text-align: right; }
-.episode-card.active { background: var(--accent-soft); border-radius: 5px; padding-inline: 9px; border-bottom-color: transparent; }
-.episode-art { width: 94px; flex: 0 0 94px; aspect-ratio: 16/10; border-radius: 4px; background: #202331; position: relative; display: grid; place-items: center; overflow: hidden; }
-.episode-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .72; }
-.episode-play { position: relative; display: grid; place-items: center; width: 27px; height: 27px; border-radius: 50%; background: #0009; color: #fff; font-size: 9px; }
-.episode-card.active .episode-play { color: #171511; background: var(--accent); }
+.episode-card {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 84px;
+  padding: 10px 14px;
+  width: 100%;
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  text-align: right;
+  cursor: pointer;
+  transition: background 0.2s var(--ease-out-expo), border-color 0.2s ease, transform 0.14s ease;
+}
+.episode-card:active {
+  transform: scale(0.98);
+  background: rgba(255, 255, 255, 0.06);
+}
+@media (hover: hover) and (pointer: fine) {
+  .episode-card:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+  .episode-card:hover .episode-art img {
+    transform: scale(1.05);
+  }
+}
+.episode-card.active {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.4);
+}
+.episode-art {
+  width: 100px;
+  flex: 0 0 100px;
+  aspect-ratio: 16/9;
+  border-radius: 10px;
+  background: #141721;
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.episode-art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.85;
+  transition: transform 0.3s ease;
+}
+.episode-play {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  transition: transform 0.2s, background 0.2s;
+}
+.episode-card.active .episode-play {
+  color: #fff;
+  background: #3b82f6;
+  border-color: #60a5fa;
+}
 .episode-copy { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
 .episode-copy small:empty, .episode-copy > span:empty { display: none; }
-.episode-copy small { font-size: 10px; color: var(--text-dim); }
-.episode-card.active .episode-copy small { color: var(--accent); }
-.episode-copy strong { font-weight: 500; font-size: 12px; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.episode-copy > span { color: var(--text-dim); font-size: 10px; line-height: 1.6; }
-.episode-number { flex: 0 0 18px; font-size: 15px; color: #736c60; text-align: center; font-variant-numeric: tabular-nums; }
+.episode-copy small { font-size: 10.5px; color: var(--text-dim); font-weight: 500; }
+.episode-card.active .episode-copy small { color: #60a5fa; }
+.episode-copy strong { font-weight: 600; font-size: 13px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: #e2e8f0; }
+.episode-copy > span { color: var(--text-dim); font-size: 10px; line-height: 1.5; }
+.episode-number { flex: 0 0 22px; font-size: 14px; font-weight: 700; color: #64748b; text-align: center; font-variant-numeric: tabular-nums; }
+.episode-card.active .episode-number { color: #60a5fa; }
 .player-sub-drawer > .drawer-topline, .player-sub-drawer > .episode-toolbar { flex-shrink: 0; }
 .changelog-container { color: var(--text-sub); font-size: 12px; line-height: 1.9; max-height: 200px; overflow-y: auto; overflow-wrap: anywhere; white-space: pre-wrap; }
 .changelog-container ul { padding-inline-start: 18px; }
@@ -1703,11 +1931,11 @@ html[data-display='tv'] .series-edition-tab:focus {
   gap: 3px;
   padding: 5px;
   border-radius: 999px;
-  background: rgba(11, 13, 19, 0.74);
-  backdrop-filter: blur(28px) saturate(145%);
-  -webkit-backdrop-filter: blur(28px) saturate(145%);
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 18px 46px rgba(0, 0, 0, 0.78);
+  background: rgba(10, 12, 18, 0.82);
+  backdrop-filter: blur(32px) saturate(160%);
+  -webkit-backdrop-filter: blur(32px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 20px 48px rgba(0, 0, 0, 0.8);
   max-width: calc(100vw - 80px);
 }
 .dock-pill {
@@ -1722,22 +1950,22 @@ html[data-display='tv'] .series-edition-tab:focus {
   padding: 4px 12px;
   border-radius: 999px;
   color: #8b92a0;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
-  transition: color .18s ease, background .18s ease, box-shadow .18s ease, transform .15s ease;
+  transition: color .2s var(--ease-out-expo), background .2s var(--ease-out-expo), box-shadow .2s ease, transform .14s ease;
 }
 .dock-pill:hover {
   color: #e2e8f0;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.06);
 }
 .dock-pill:active {
-  transform: scale(0.95);
+  transform: scale(0.92);
 }
 .dock-pill.active {
   color: #ffffff;
   font-weight: 700;
-  background: rgba(255, 255, 255, 0.13);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 .dock-ico {
   width: 20px;
@@ -2523,30 +2751,42 @@ html[data-display='desktop'] .sheet-content:has(.series-detail-hero) .sheet-epis
    Logical UI/UX Refinement Pass (Hierarchy, Cards, Badges, Dock Scrim)
    ========================================================================= */
 
-/* 1. Header Hierarchy: Underline Tabs & Balanced Alignment */
+/* 1. Header Hierarchy: Tactile Glass Capsule Tabs */
 .catalogue-tabs {
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  padding: 0;
-  gap: 18px;
+  display: inline-flex;
+  align-items: center;
+  padding: 3.5px;
+  gap: 3px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 .catalogue-tabs button {
-  min-width: auto;
-  height: 40px;
-  padding: 0 4px;
-  border-radius: 0;
+  position: relative;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #94a3b8;
+  padding: 0 16px;
+  height: 32px;
+  min-width: 72px;
+  border-radius: 9999px;
+  border: none !important;
   background: transparent !important;
   box-shadow: none !important;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-dim);
-  border-bottom: 2px solid transparent;
-  transition: color .18s ease, border-color .18s ease;
+  transition: color 0.18s cubic-bezier(0.16, 1, 0.3, 1), background 0.18s cubic-bezier(0.16, 1, 0.3, 1), transform 0.12s ease;
+  cursor: pointer;
+}
+.catalogue-tabs button:active {
+  transform: scale(0.95);
 }
 .catalogue-tabs button.active {
-  color: #ffffff;
-  border-bottom-color: #ffffff;
+  color: #ffffff !important;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
 }
 @media (max-width: 1023px) {
   .top-nav-end:has(#desktopWindowControls.hidden) {
