@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Subtle Cherry Crimson Under-glow Behind Monogram -->
+    <path
+        android:fillColor="#22FF3366"
+        android:pathData="M54,54m-24,0a24,24 0,1 1,48 0a24,24 0,1 1,-48 0" />
+
+    <!-- Top Platinum Architectural Bar -->
+    <path
+        android:fillColor="#F5F6F8"
+        android:pathData="M31,34 H70 L63,42 H31 C28.5,42 27,40.2 27,38 C27,35.8 28.5,34 31,34 Z" />
+
+    <!-- Bottom Platinum Architectural Bar -->
+    <path
+        android:fillColor="#F5F6F8"
+        android:pathData="M45,66 H77 C79.5,66 81,67.8 81,70 C81,72.2 79.5,74 77,74 H38 L45,66 Z" />
+
+    <!-- Diagonal Velvet Crimson Ribbon Stroke -->
+    <path
+        android:fillColor="#E02447"
+        android:pathData="M70,34 L80,34 L38,74 L28,74 Z" />
+
+    <!-- Deep Crimson Velvet Depth Shadow -->
+    <path
+        android:fillColor="#9C1030"
+        android:pathData="M70,34 L74.5,34 L33,74 L28,74 Z" />
+
+    <!-- Pure Platinum & Rose Diamond Nuqta -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M78,24 L84,30 L78,36 L72,30 Z" />
+    <path
+        android:fillColor="#FFB3C1"
+        android:pathData="M78,26.2 L81.8,30 L78,33.8 L74.2,30 Z" />
+
+</vector>

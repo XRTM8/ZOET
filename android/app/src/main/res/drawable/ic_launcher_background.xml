@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Ultra-Deep Midnight Black AMOLED Base -->
+    <path
+        android:fillColor="#070204"
+        android:pathData="M0,0h108v108h-108z" />
+
+    <!-- Outer Velvet Burgundy Halo Glow -->
+    <path
+        android:fillColor="#159E1B42"
+        android:pathData="M54,54m-46,0a46,46 0,1 1,92 0a46,46 0,1 1,-92 0" />
+
+    <!-- Mid Burgundy Radiant Depth -->
+    <path
+        android:fillColor="#2572142B"
+        android:pathData="M54,54m-34,0a34,34 0,1 1,68 0a34,34 0,1 1,-68 0" />
+
+    <!-- Core Radiant Wine Core -->
+    <path
+        android:fillColor="#389E1B42"
+        android:pathData="M54,54m-20,0a20,20 0,1 1,40 0a20,20 0,1 1,-40 0" />
+
+</vector>

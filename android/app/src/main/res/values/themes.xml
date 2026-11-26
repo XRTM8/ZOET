@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.Krmzi" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="android:statusBarColor">#FF060709</item>
-        <item name="android:navigationBarColor">#FF060709</item>
-        <item name="android:windowBackground">#FF060709</item>
+        <item name="android:statusBarColor">#FF000000</item>
+        <item name="android:navigationBarColor">#FF0A0B0E</item>
+        <item name="android:windowBackground">#FF000000</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>

@@ -1,6 +1,39 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#08090c"/>
-  <rect x="16" y="16" width="480" height="480" rx="98" fill="none" stroke="#ffffff12" stroke-width="2"/>
-  <path d="M128 160H384L128 352H384" fill="none" stroke="#f4f5f7" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="384" cy="160" r="28" fill="#e53935"/>
+  <defs>
+    <radialGradient id="zoetHalo" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#9E1B42" stop-opacity="0.34"/>
+      <stop offset="45%" stop-color="#72142B" stop-opacity="0.18"/>
+      <stop offset="80%" stop-color="#9E1B42" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#070204" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="zoetCrimson" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E02447"/>
+      <stop offset="100%" stop-color="#9C1030"/>
+    </linearGradient>
+    <linearGradient id="zoetPlatinum" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#D8DCE6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Ultra-Deep Midnight Black AMOLED Base -->
+  <rect width="512" height="512" rx="116" fill="#070204"/>
+
+  <!-- Velvet Burgundy Halo Glow -->
+  <circle cx="256" cy="256" r="224" fill="url(#zoetHalo)"/>
+
+  <!-- Crisp Hairline Border -->
+  <rect x="14" y="14" width="484" height="484" rx="104" fill="none" stroke="#9E1B42" stroke-opacity="0.35" stroke-width="2"/>
+
+  <!-- Top & Bottom Platinum Architectural Bars -->
+  <path d="M138 156 H334 L300 198 H138 C126 198 118 189 118 177 C118 165 126 156 138 156 Z" fill="url(#zoetPlatinum)"/>
+  <path d="M212 314 H374 C386 314 394 323 394 335 C394 347 386 356 374 356 H178 L212 314 Z" fill="url(#zoetPlatinum)"/>
+
+  <!-- Diagonal Velvet Crimson Ribbon Stroke -->
+  <path d="M334 156 L384 156 L178 356 L128 356 Z" fill="url(#zoetCrimson)"/>
+  <path d="M334 156 L356 156 L154 356 L128 356 Z" fill="#9C1030" opacity="0.55"/>
+
+  <!-- Signature Platinum & Rose Diamond Nuqta -->
+  <path d="M376 112 L404 140 L376 168 L348 140 Z" fill="#FFFFFF"/>
+  <path d="M376 122 L394 140 L376 158 L358 140 Z" fill="#FFB3C1"/>
 </svg>

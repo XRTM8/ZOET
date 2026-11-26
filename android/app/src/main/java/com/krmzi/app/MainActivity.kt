@@ -1061,7 +1061,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         isDestroyed = true
-        abandonPlaybackAudioFocus()
         unregisterNoisyReceiver()
         try {
             mediaSession?.isActive = false

@@ -1,23 +1,28 @@
 /* ZOET — AMOLED glass surfaces and high-performance device layouts. */
 :root {
   --bg-core: #000000;
-  --bg-surface: #07080a;
-  --bg-elevated: #0f1115;
-  --bg-glass: rgba(10, 12, 16, 0.75);
-  --bg-glass-dock: rgba(0, 0, 0, 0.88);
-  --text-main: #f0f2f5;
-  --text-sub: #b8bcc6;
-  --text-dim: #7d838f;
-  --accent: #e2e5eb;
-  --accent-soft: rgba(226, 229, 235, 0.1);
-  --accent-glow: rgba(255, 255, 255, 0.12);
-  --accent-gradient: #e2e5eb;
+  --bg-studio: #0A0B0E;
+  --bg-surface: #14151B;
+  --bg-elevated: #1E2028;
+  --bg-active: #282A36;
+  --bg-glass: rgba(10, 11, 14, 0.85);
+  --bg-glass-dock: rgba(10, 11, 14, 0.88);
+  --text-main: #F5F6F8;
+  --text-sub: #A1A3AF;
+  --text-dim: #636674;
+  --accent: #9E1B42;
+  --accent-crimson: #E02447;
+  --accent-deep: #72142B;
+  --accent-warm: #8B1538;
+  --accent-soft: rgba(158, 27, 66, 0.16);
+  --accent-glow: rgba(158, 27, 66, 0.42);
+  --accent-gradient: linear-gradient(135deg, #9E1B42 0%, #E02447 100%);
   --line-subtle: rgba(255, 255, 255, 0.08);
-  --line-hover: rgba(255, 255, 255, 0.2);
+  --line-hover: rgba(255, 255, 255, 0.14);
   --radius-xs: 8px;
   --radius-sm: 12px;
   --radius-md: 16px;
-  --radius-lg: 18px;
+  --radius-lg: 20px;
   --ease-spring: cubic-bezier(.2,.7,.2,1);
   --ease-bounce: var(--ease-spring);
   --safe-top: env(safe-area-inset-top, 0px);
@@ -4400,6 +4405,187 @@ html[data-display='tv'] .search-clear-btn {
   height: 44px;
   min-width: 44px;
   min-height: 44px;
+}
+
+/* ==========================================================================
+   Athar Studio Visual Identity — Pure AMOLED + Velvet Burgundy Luxury Accent
+   ========================================================================== */
+body {
+  background: var(--bg-core);
+  color: var(--text-main);
+}
+.top-nav {
+  background: var(--bg-glass);
+  border-bottom: 1px solid var(--line-subtle);
+}
+.brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: radial-gradient(circle at center, rgba(158, 27, 66, 0.28) 0%, #070204 75%);
+  border: 1px solid rgba(158, 27, 66, 0.45);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65), 0 0 12px rgba(158, 27, 66, 0.18);
+}
+.brand-mark svg {
+  width: 17px;
+  height: 17px;
+}
+.catalogue-tabs,
+.source-options,
+.search-filter-pills {
+  background: var(--bg-surface);
+  border: 1px solid var(--line-subtle);
+}
+.catalogue-tabs button.active,
+.source-option.active {
+  color: var(--text-main);
+  background: rgba(158, 27, 66, 0.26);
+  border: 1px solid rgba(158, 27, 66, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 12px rgba(158, 27, 66, 0.18);
+}
+.search-filter-pill.active {
+  background: var(--accent);
+  color: var(--text-main);
+}
+.desktop-search-container input {
+  background: var(--bg-surface);
+  border: 1px solid var(--line-subtle);
+}
+.desktop-search-container input:hover {
+  background: var(--bg-elevated);
+  border-color: var(--line-hover);
+}
+.desktop-search-container input:focus {
+  background: var(--bg-studio);
+  border-color: var(--accent-glow);
+}
+.poster-frame {
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--bg-elevated) 0%, var(--bg-studio) 100%);
+  border: 1px solid var(--line-subtle);
+}
+@media (hover: hover) and (pointer: fine) {
+  .series-tile:hover .poster-frame {
+    border-color: var(--accent-glow);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6), 0 0 22px rgba(158, 27, 66, 0.24);
+  }
+  .series-tile:hover .series-tile-title {
+    color: var(--accent-crimson);
+  }
+}
+.glass-dock {
+  background: var(--bg-glass);
+  border: 1px solid var(--line-subtle);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 20px 48px rgba(0, 0, 0, 0.85);
+}
+.dock-pill {
+  color: var(--text-dim);
+}
+.dock-pill:hover {
+  color: var(--text-main);
+  background: var(--bg-elevated);
+}
+.dock-pill.active {
+  color: var(--accent-crimson);
+  background: rgba(158, 27, 66, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(158, 27, 66, 0.38);
+}
+.dock-search-fab {
+  background: var(--bg-glass);
+  border: 1px solid var(--line-subtle);
+  color: var(--text-main);
+}
+.dock-search-fab:hover {
+  background: var(--bg-elevated);
+  border-color: var(--accent-glow);
+  color: var(--accent-crimson);
+}
+.sheet-panel {
+  background: var(--bg-studio);
+  border-top: 1px solid var(--line-subtle);
+}
+.series-detail-hero {
+  background: linear-gradient(180deg, #220810 0%, var(--bg-surface) 100%);
+}
+.series-detail-shade {
+  background: linear-gradient(0deg, rgba(10, 11, 14, 0.98) 0%, rgba(10, 11, 14, 0.65) 55%, rgba(34, 8, 16, 0.25) 100%);
+}
+.series-source-tag,
+.sheet-pill.direct,
+.btn-retry,
+.check-update-btn.success {
+  color: var(--accent-crimson);
+}
+.episode-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--line-subtle);
+  border-radius: 14px;
+}
+.episode-card.active {
+  background: var(--accent-soft);
+  border-color: var(--accent-glow);
+}
+.episode-card.active .episode-play {
+  background: var(--accent);
+  border-color: var(--accent-crimson);
+  color: var(--text-main);
+}
+.episode-card.active .episode-copy small,
+.episode-card.active .episode-number {
+  color: var(--accent-crimson);
+}
+.settings-group,
+.offline-card,
+.library-empty-state,
+.search-recovery-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--line-subtle);
+  border-radius: 16px;
+}
+.settings-row {
+  border-bottom: 1px solid var(--line-subtle);
+}
+.settings-row-btn:hover {
+  background: var(--bg-elevated);
+}
+.settings-row-ico {
+  background: var(--accent-soft);
+  border: 1px solid rgba(158, 27, 66, 0.35);
+  color: var(--accent-crimson);
+}
+.settings-select,
+.settings-btn {
+  background: var(--bg-elevated);
+  border: 1px solid var(--line-subtle);
+}
+.settings-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent-crimson);
+  color: var(--text-main);
+}
+.segment-btn.active {
+  color: var(--text-main);
+  border-bottom-color: var(--accent-crimson);
+}
+.spinner-ring {
+  border-top-color: var(--accent-crimson);
+}
+.search-chip {
+  background: var(--bg-surface);
+  border: 1px solid var(--line-subtle);
+}
+.search-chip:hover,
+.search-chip:focus-visible {
+  background: var(--accent-soft);
+  border-color: var(--accent-glow);
+}
+html[data-display='tv'] .series-tile:focus .poster-frame,
+html[data-display='tv'] .episode-card:focus,
+html[data-display='tv'] .tv-nav-btn:focus,
+html[data-display='tv'] .source-option:focus,
+html[data-display='tv'] .catalogue-tabs button:focus {
+  outline: 2px solid var(--accent-crimson);
+  outline-offset: 2px;
 }
 
 
