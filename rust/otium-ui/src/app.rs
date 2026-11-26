@@ -2862,7 +2862,7 @@ fn check_updates_auto() {
         .and_then(|s| s.parse::<f64>().ok())
         .unwrap_or(0.0);
     let now = js_sys::Date::now();
-    if now - last < 86_400_000.0 {
+    if now - last < 3_600_000.0 {
         return;
     }
     store("zoet_update_checked", &now.to_string());
