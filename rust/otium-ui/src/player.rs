@@ -2977,7 +2977,7 @@ pub fn controls_help() {
         ("N", "الحلقة التالية"),
         ("Esc", "إغلاق القائمة أو المشغل"),
     ];
-    app::open_sheet("اختصارات التحكم",&format!("<div class=\"controls-guide\"><p>انقر مرتين للتقديم أو الرجوع. اضغط مطوّلاً لسرعة 2×. اسحب عمودياً يمين الفيديو للصوت ويساره للإضاءة. تدعم ZOET يد التحكم (Gamepad) لأجهزة Xbox و PlayStation بالكامل.</p><div class=\"shortcut-list\">{}</div></div>",rows.iter().map(|(key,label)|format!("<div><kbd dir=\"ltr\">{}</kbd><span>{}</span></div>",esc(key),esc(label))).collect::<String>()));
+    app::open_sheet("اختصارات التحكم",&format!("<div class=\"controls-guide\"><p>انقر مرتين للتقديم أو الرجوع. اضغط مطوّلاً لسرعة 2×. تدعم ZOET يد التحكم (Gamepad) لأجهزة Xbox و PlayStation بالكامل.</p><div class=\"shortcut-list\">{}</div></div>",rows.iter().map(|(key,label)|format!("<div><kbd dir=\"ltr\">{}</kbd><span>{}</span></div>",esc(key),esc(label))).collect::<String>()));
 }
 fn action(row: Element) {
     let kind = row.get_attribute("data-player-action").unwrap_or_default();
