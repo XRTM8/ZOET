@@ -2688,11 +2688,7 @@ pub fn remote_focus_key(key: &str) {
                 || curr.id() == "tvSearchBtn"
                 || curr.id() == "tvSettingsBtn";
             if in_top {
-                let grid_id = if el("tabMovies").class_list().contains("active") {
-                    "moviesGrid"
-                } else {
-                    "seriesGrid"
-                };
+                let grid_id = "seriesGrid";
                 if let Some(first_card) = el(grid_id)
                     .first_element_child()
                     .and_then(|e| e.dyn_into::<HtmlElement>().ok())

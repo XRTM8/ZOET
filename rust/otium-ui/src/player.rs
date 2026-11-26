@@ -392,12 +392,12 @@ fn title_ui(episode: &Value) {
     );
     let is_dubbed = catalogue::edition(episode) == "dubbed";
     if is_dubbed {
-        text("playerEditionIcon", "💬");
+        el("playerEditionIcon").set_inner_html(crate::icons::SUBTITLES);
         text("playerEditionLabel", "المترجم");
         let _ = el("playerEditionBtn").set_attribute("data-edition", "original");
         let _ = el("playerEditionBtn").set_attribute("title", "التبديل إلى النسخة المترجمة");
     } else {
-        text("playerEditionIcon", "🎙️");
+        el("playerEditionIcon").set_inner_html(crate::icons::DUBBED);
         text("playerEditionLabel", "المدبلج");
         let _ = el("playerEditionBtn").set_attribute("data-edition", "dubbed");
         let _ = el("playerEditionBtn").set_attribute("title", "التبديل إلى النسخة المدبلجة");

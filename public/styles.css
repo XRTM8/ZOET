@@ -3517,7 +3517,7 @@ html[data-display='tv'] .sheet-pill {
 }
 
 /* TV Series Detail Two-Pane Architecture */
-html[data-display='tv'] .sheet-content {
+html[data-display='tv'] .sheet-content:has(.series-detail-hero) {
   display: flex !important;
   flex-direction: row !important;
   gap: 32px !important;
